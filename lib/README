@@ -1,0 +1,104 @@
+
+This directory is intended for project specific (private) libraries.
+PlatformIO will compile them to static libraries and link into executable file.
+
+The source code of each library should be placed in a an own separate directory
+("lib/your_library_name/[here are source files]").
+
+For example, see a structure of the following two libraries `Foo` and `Bar`:
+
+|--lib
+|  |
+|  |--Bar
+|  |  |--docs
+|  |  |--examples
+|  |  |--src
+|  |     |- Bar.c
+|  |     |- Bar.h
+|  |  |- library.json (optional, custom build options, etc) https://docs.platformio.org/page/librarymanager/config.html
+|  |
+|  |--Foo
+|  |  |- Foo.c
+|  |  |- Foo.h
+|  |
+|  |- README --> THIS FILE
+|
+|- platformio.ini
+|--src
+   |- main.c
+
+and a contents of `src/main.c`:
+```
+#include <Foo.h>
+#include <Bar.h>
+
+int main (void)
+{
+  ...
+}
+
+```
+
+PlatformIO Library Dependency Finder will find automatically dependent
+libraries scanning project source files.
+
+More information about PlatformIO Library Dependency Finder
+- https://docs.platformio.org/page/librarymanager/ldf.html
+
+----------------Version note------------------------------------------
+Bx.y.za
+B : Beta Version
+x : main board Version
+y : hardware modification/addition on main board
+z : software modification/fiture
+a : minor change 
+
+B3.6.6
+  z8c : + use SD activation and set some def seting (time for server etc..)
+        - optional PZEM reading disabled / enabled
+  z8d : + mqttconnect bug loop in void loop fixed
+        + sync time when hard reset reenabled
+        + enable/disable PZEM reading via #define 
+        + rolling menu
+        + exit to home (date time view)
+  z7 : + sending multiple fields (volt, ampere, pf, etc)
+       + 2 way communication and command with device
+       (cmd : teskirim, send_status,sync_time)
+  y6 : + jumper wire added from base (Tr, ESP port 27) to SD module port CS/SS to support trigger when SD initialize/begin
+  z6 : + battery voltage reading
+       + safe mode when battery bellow determined limit
+       + battery icon when safe mode activated
+       + pending data checking menu
+       + battery on safe menu
+       + showing battery voltage on main display instead of apn name
+       + internet balance check menu
+       + deep sleep if +-10 attempt to init SD was failed, then wakeup again +-30minutes latter to redo init
+
+  z5 : + safe mode on certain time
+     : + time safe mode menu 
+  y5 : + SD card module for logging data, activated
+  z4 : + default server 
+
+  JSON config{
+    "host": "internet",
+    "port": 1883,
+    "ambilData": 3,
+    "kirimData": 8,
+    "lastSetAlarm0": 683795968,
+    "lastSetAlarm1": 683795967,
+    "timezone": 8,
+    "safe_h_on": 19,
+    "safe_h_off": 10,
+    "battery_safe": 11,
+    "minimum_signal": 0,
+    "time_for_broker": 150,
+    "watchdog_timer": 360,
+    "useSD": true,
+    "max_send": 25,
+    "SD_attempt": 1500,
+    "burst_send_h_on": 10,
+    "burst_send_h_off": 13,
+    "brokerSelector": true,
+    "config_selected_apn": 0,
+   "ussd_code": "*888*6*1*2*2*3*4#"
+  }

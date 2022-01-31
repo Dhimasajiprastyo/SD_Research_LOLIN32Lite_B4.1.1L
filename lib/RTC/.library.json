@@ -1,0 +1,48 @@
+{
+    "name": "RTC", 
+    "repository": {
+        "url": "https://github.com/Makuna/Rtc.git", 
+        "type": "git"
+    }, 
+    "platforms": [
+        "atmelavr", 
+        "atmelmegaavr", 
+        "atmelsam", 
+        "espressif32", 
+        "espressif8266", 
+        "gd32v", 
+        "infineonxmc", 
+        "intel_arc32", 
+        "kendryte210", 
+        "microchippic32", 
+        "nordicnrf51", 
+        "nordicnrf52", 
+        "ststm32", 
+        "ststm8", 
+        "teensy", 
+        "timsp430"
+    ], 
+    "frameworks": [
+        "arduino"
+    ], 
+    "version": "2.3.4", 
+    "authors": [
+        {
+            "maintainer": false, 
+            "name": "Michael Miller", 
+            "url": "https://github.com/Makuna", 
+            "email": null
+        }
+    ], 
+    "keywords": [
+        "ds3234", 
+        "rtc", 
+        "ds3231", 
+        "clock", 
+        "ds1302", 
+        "ds1307", 
+        "at24c32"
+    ], 
+    "id": 274, 
+    "description": "A library that makes interfacing DS1302, DS1307, DS3231, and DS3234 Real Time Clock modules easy."
+}
