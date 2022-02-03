@@ -27,31 +27,6 @@
 //--------DEFINE ACTIVATION-----------
 #define __NO_SYCN__
 #define _USE_DEF_SERVER_
-//#define _USE_WATER_H_ONLY_
-
-// //#define _USE_ALL_PRESSURE_
-// #ifndef _USE_ALL_PRESSURE_
-//   #define _USE_PZEM_
-//   //#define _USE_SLAVE_
-// #endif
-
-// #ifdef _USE_PZEM_
-//   #ifndef _USE_SLAVE_
-//     #define _DIRECT_PZEM_
-//   #endif
-// #endif
-//--------DEFINE ACTIVATION-----------
-
-// //#define _USE_STAGING_  //jadikan baris ini comment jikan menginginkan koneksi ke server PRODUCTION
-// #define SOFTWARE_VERSION "B3.7.8m" //UNTUK BOARD YG SUDAH DIMODIF
-// //#define SOFTWARE_VERSION "B3.6.8m" //UNTUK BOARD YG BELUM DIMODIF
-
-// #define DEFAULT_TIMEZONE 8
-// //--------UBAH OFFSET PRESSURE DI SINI-------------------------
-// #define _OFFSET_P1_ 0.7
-// #define _OFFSET_P2_ 0.7
-// #define _OFFSET_P3_ 0.7
-// //-------------------------------------------------------------
 //===========================PENTING==============================================
 
 #ifdef _USE_PZEM_
@@ -83,7 +58,7 @@
 #define BUTTON1 34
 #define BUTTON2 35
 #define BUTTON3 32
-#define TIMEZONE 8
+// #define TIMEZONE 8
 #define BAUDRATE 115200
 #define GSM_BAUDRATE 9600
 #define I2C_ADC0_ADDRESS 0x48
@@ -102,7 +77,6 @@
 #define APN "internet"
 #define APN_USERNAME ""
 #define APN_PASSWORD ""
-// #define SOFTWARE_VERSION "B3.7.8m"
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define constBattery 3.378
 #define DEFAULT_WATCHDOG_TIMER 300 // 5MENIT
@@ -110,7 +84,6 @@
 #define DEFAULT_TIME_FOR_BROKER 180 //3 MENIT
 #define ANS_STATUS_LENGTH 770 //Jumlah karakter answer status broker, sebelumnya 750
 #define LIMIT_SIMILAR_MESSAGE 8 //mencegah pesan yang sama dari retain message untuk diproses dalam 1 sesi komunikasi
-// #define DEFAULT_TIMEZONE 8
 #define DEFAULT_SYNCTIME_INTERVAL 8
 
 #if defined (_DIRECT_PZEM_)
@@ -120,8 +93,6 @@
 #endif
 
 #define SD_SS 14
-//#define PWR_H_SENSOR 27
-
 //=========================================================================
 
 
@@ -246,7 +217,6 @@ const char *brokerProduction = "pakis-mqtt.pdampintar.id";
 char *another_staging = "34.101.187.36";
 #endif
 
-
 unsigned long lcdRefresh;
 byte Lock[8] = {
   0b01110,
@@ -298,13 +268,10 @@ struct Config {
   int port;
   int kirimDataInterval;
   int ambilDataInterval;
-  // uint32_t lastSetAlarm0;
-  // uint32_t lastSetAlarm1;
   int timezone;
   bool brokerSelector;
   uint8_t selected_apn;
   uint16_t SD_store_limit;
-  // uint8_t safe_h_off;
   bool listening;
   float battery_safe;
   uint8_t minimum_signal;
@@ -323,7 +290,7 @@ Config config;
 struct DeviceInfo {
   char software_version[10];
   bool sd_failure;
-  char my_dn[11];
+  char my_dn[13];
   char my_location[40];
 };
 DeviceInfo device_info;
@@ -476,7 +443,24 @@ void setCurrentTime(uint32_t unixtime) {
 }
 
 uint32_t syncTimeUnixTime() {
-  int err = httpTime.get(TIMEZONE == 7 ? "/api/timezone/Asia/Jakarta" : "/api/timezone/Asia/Makassar");
+  if((config.timezone<7) || (config.timezone>9)){
+    Serial.println("BUKAN TIMEZONE INDONESIA");
+    lcd.clear(); lcd.print("TimezoneInvalid");
+    delay(2000);
+    config.timezone = DEFAULT_TIMEZONE;
+  }
+  String area; area.reserve(29);
+  if(config.timezone == 7){
+    area = "/api/timezone/Asia/Jakarta";
+  }else if(config.timezone == 8){
+    area = "/api/timezone/Asia/Makassar";
+  }else if(config.timezone == 9){
+    area = "/api/timezone/Asia/Jayapura";
+  }
+  const char* c_area = area.c_str();
+  Serial.println(c_area);
+  // int err = httpTime.get(TIMEZONE == 7 ? "/api/timezone/Asia/Jakarta" : "/api/timezone/Asia/Makassar");
+  int err = httpTime.get(c_area);
   if (err != 0 ) return 0;
   DynamicJsonDocument doc(512);
   String strTime = httpTime.responseBody();
@@ -1004,7 +988,7 @@ bool wait_for_signal(uint16_t second, uint8_t minimumSignal) {
   uint8_t csq_1 = 0; //Checking signal before sync time--------------
   bool getSignal = true;
   unsigned long timeout = millis();
-  while ((csq_1 < minimumSignal) || (csq_1 > 30)) {
+  while ((csq_1 < minimumSignal) || (csq_1 > 80)) {
     csq_1 = modem.getSignalQuality();
     lcd.clear();
     lcd.printf("Signal:%i [%i]", csq_1, minimumSignal);
@@ -1830,8 +1814,8 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   lcd.setCursor(13, 1); lcd.printf("%i,%i", already_sync, mod_hour);
   delay(500);
 
-  if ((year > 2100) || (month > 12) || (day > 31) || (hour > 23) || (minute > 59) || (config.timezone != DEFAULT_TIMEZONE)) { //sync time jika tanggal tidak wajar
-    config.timezone = DEFAULT_TIMEZONE;
+  // if ((year > 2100) || (month > 12) || (day > 31) || (hour > 23) || (minute > 59) || (config.timezone != DEFAULT_TIMEZONE)) { //sync time jika tanggal tidak wajar
+  if ((year > 2100) || (month > 12) || (day > 31) || (hour > 23) || (minute > 59)) { //sync time jika tanggal tidak wajar
     sync_time(0);
     config.brokerSelector = true;
     writeConfig(SPIFFS, config);
@@ -1851,6 +1835,8 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
     if (cekSD(12)) {
       if (!config.useSD) {
         config.useSD = true;
+        config.ambilDataInterval = 5;
+        config.kirimDataInterval = 30;
         writeConfig(SPIFFS, config);
       }
       if (device_info.sd_failure) {
@@ -1875,6 +1861,10 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
       recountPend();
       delay(1000);
     }
+  } else if((!config.useSD)&&(config.ambilDataInterval<7)){ //indikasi jika sd didisable secara manual
+    config.ambilDataInterval = 7;
+    config.kirimDataInterval = 35;
+    writeConfig(SPIFFS, config);
   }
 
   Serial.println("[LOG2SD]-SerializeData:");
@@ -2681,11 +2671,14 @@ void setDefSettings() {
   config.sync_time_interval = DEFAULT_SYNCTIME_INTERVAL; // sync di jam 12 malam saja sekali
   config.log_cnt_auto_restart = 250;
 
-  strlcpy(device_info.software_version, SOFTWARE_VERSION, sizeof(device_info.software_version));
-  strlcpy(device_info.my_location, c_myloc, sizeof(device_info.my_location));
-  strlcpy(device_info.my_dn, c_mydn, sizeof(device_info.my_dn));
+  // strlcpy(device_info.software_version, SOFTWARE_VERSION, sizeof(device_info.software_version));
+  // strlcpy(device_info.my_location, c_myloc, sizeof(device_info.my_location));
+  // strlcpy(device_info.my_dn, c_mydn, sizeof(device_info.my_dn));
+  strlcpy(device_info.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION)+1));
+  strlcpy(device_info.my_dn, c_mydn, (strlen(c_mydn)+1));
+  strncpy(device_info.my_location, c_myloc, (strlen(c_myloc)+1));
 
-  strlcpy(device_info.my_dn, DEVICE_ID, 14);
+  // strlcpy(device_info.my_dn, DEVICE_ID, 14);
   writeConfig(SPIFFS, config);
   write_device_info(SPIFFS, device_info);
   read_device_info(SPIFFS, device_info);
@@ -2854,8 +2847,8 @@ void setup() {
   Serial.println(getStringDateTime(config.timezone));
   //----------------------READ DEVICE INFO FROM SPIFFS---------------------
   
-  //bool bdevinfo = read_device_info(SPIFFS, device_info);
-  bool bdevinfo = false;
+  bool bdevinfo = read_device_info(SPIFFS, device_info);
+  // bool bdevinfo = false;
   if (!bdevinfo) {
     Serial.println("Device info file not found ! (_f/Setup)");
     DeviceInfo setupDeviceInfo;
@@ -2868,17 +2861,20 @@ void setup() {
     Serial.println(c_myloc);
     Serial.println(c_mydn);
 
-    strlcpy(setupDeviceInfo.software_version, SOFTWARE_VERSION, 10);
     setupDeviceInfo.sd_failure = true;
-    strlcpy(setupDeviceInfo.my_location, c_myloc, 40);
-    strlcpy(setupDeviceInfo.my_dn, c_mydn, 12);
-
+    strlcpy(setupDeviceInfo.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION)+1));
+    strlcpy(setupDeviceInfo.my_dn, c_mydn, (strlen(c_mydn)+1));
+    strncpy(setupDeviceInfo.my_location, c_myloc, (strlen(c_myloc)+1));
+    Serial.println("IN_STRLCPY-0----");
+    Serial.println(setupDeviceInfo.software_version);
+    Serial.println(setupDeviceInfo.my_location);
+    Serial.println(setupDeviceInfo.my_dn);
     bool bsetupDeviceInfo = write_device_info(SPIFFS, setupDeviceInfo);
     if (!bsetupDeviceInfo) {
       Serial.println("Failed to write Device Info (_f/Setup)");
     } else {
       bsetupDeviceInfo = read_device_info(SPIFFS, setupDeviceInfo);
-      Serial.println("inBdeviceInfp");
+      Serial.println("WriteDevInfo_OK----");
       Serial.println(setupDeviceInfo.my_location);
       if (!bsetupDeviceInfo) {
         Serial.println("Failed load Device Info after setup (_f/Setup)");
@@ -3315,7 +3311,7 @@ void setup() {
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_33, 0); // change manually
   esp_sleep_enable_ext1_wakeup(BUTTON_BITMASK, ESP_EXT1_WAKEUP_ANY_HIGH);
 
-  Serial.println(getStringDateTime(TIMEZONE));
+  Serial.println(getStringDateTime(config.timezone));
   lcd.clear();
   delay(200);
 
@@ -3687,6 +3683,7 @@ void loop() {
     lcdPrintCurrentDate(); // ---[5/12/60]---
     lcd.setCursor(10, 0); lcd.printf("|%i",recorded_aprox);
     lcd.setCursor(0, 1); lcd.printf("[%i/%i/%i] p:%i|", config.ambilDataInterval, config.kirimDataInterval, config.time_for_broker, pending_aprox);
+    Serial.println(device_info.my_location);
     esp_deep_sleep_start();
   }
 }
