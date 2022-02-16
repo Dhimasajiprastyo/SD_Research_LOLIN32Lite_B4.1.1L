@@ -74,7 +74,7 @@ String Menu::router() {
   } else if (levelMenu == 1 && selector[0] == 6) {
     return sdMenu[selector[1]];
   } else if (levelMenu == 1 && selector[0] == 7) {
-    return "#pending$";
+    return "#pzemset$";
   } else if (levelMenu == 1 && selector[0] == 8) {
     return "#bat$";
   } else if (levelMenu == 1 && selector[0] == 9) {
