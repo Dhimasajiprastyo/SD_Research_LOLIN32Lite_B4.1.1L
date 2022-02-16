@@ -17,7 +17,7 @@ enum menuAction {
 
 class Menu {
   private:
-    const String        rootMenu[MAX_ROOT_MENU] = {"1.Setting", "2.Analog", "3.Status", "4.Data", "5.Test", "6.APN", "7.SD menu", "8.Data on SD","9.Battery safe","10.Min Signal","11.Burst Send","12.DEF.SETTINGS","13.Exit"};
+    const String        rootMenu[MAX_ROOT_MENU] = {"1.Setting", "2.Analog", "3.Status", "4.Data", "5.Test", "6.APN", "7.SD menu", "8.PZEM settings","9.Battery safe","10.Min Signal","11.Burst Send","12.DEF.SETTINGS","13.Exit"};
     const String        settingMenu[MAX_SETTING_MENU] = {"1-1.Ambil Data", "1-2.Kirim", "1-3.Zona waktu", "1-4.Server", "1-5.Back"};
     const String        sdMenu[MAX_SD_MENU] = {"71.Disable SD", "72.Enabel SD", "73.Clear Pend", "74.Clear Log", "75.Recount Log", "76.Recount Pend", "77.Back"};
     const byte          buttonPin[3] = {34, 35, 32};
