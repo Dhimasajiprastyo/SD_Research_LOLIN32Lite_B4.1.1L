@@ -26,7 +26,7 @@
 //===========================PENTING==============================================
 //--------DEFINE ACTIVATION-----------
 #define __NO_SYCN__
-#define _USE_DEF_SERVER_
+// #define _USE_DEF_SERVER_
 //===========================PENTING==============================================
 
 #ifdef _USE_PZEM_
@@ -80,7 +80,7 @@
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
 #define constBattery 3.378
 #define DEFAULT_WATCHDOG_TIMER 300 // 5MENIT
-#define DEFAULT_BATTERY_SAFE 11.2 //11 VOLT
+#define DEFAULT_BATTERY_SAFE 11.1 //11 VOLT
 #define DEFAULT_TIME_FOR_BROKER 180 //3 MENIT
 #define ANS_STATUS_LENGTH 770 //Jumlah karakter answer status broker, sebelumnya 750
 #define LIMIT_SIMILAR_MESSAGE 8 //mencegah pesan yang sama dari retain message untuk diproses dalam 1 sesi komunikasi
@@ -113,6 +113,8 @@ HttpClient httpTime(client, "worldtimeapi.org", 80);
    level tegangan serial master(ESP32) : 3.3v
    level tegangan serial slave (arduino nano) :3.3v
    Regulator tegangan untuk PZEM harus disesuaikan sesuai dengan master yang digunakan
+   PZEM(TX)------(RX)ESP
+   PZEM(RX)------(TX)ESP
 */
 PZEM004Tv30 pzem(&pzem_serial);
 PZEM004Tv30 pzem1(&pzem_serial, 1);
@@ -205,7 +207,7 @@ const char *brokerProduction = "pakis-mqtt.sumpahpalapa.com";
 // char *brokerProduction = "pakis-mqtt.iotsakti.id";
 #else
 //char *brokerStaging = "34.101.187.36";
-const char *brokerStaging = "pakis-mqtt.pdampintar.id";
+const char *brokerStaging = "pakis-mqtt.sumpahpalapa.com";
 const char *brokerProduction = "pakis-mqtt.pdampintar.id";
 // char *brokerStaging = "34.87.0.141";
 // char *brokerProduction = "34.87.0.141";
@@ -260,6 +262,17 @@ byte sd[8] = {
   0b10001,
   0b10001,
   0b11111
+};
+
+byte electric[8] = {
+  0b00011,
+  0b00110,
+  0b01100,
+  0b11111,
+  0b00011,
+  0b00110,
+  0b01100,
+  0b11000
 };
 
 
@@ -392,6 +405,7 @@ int16_t readI2CAnalog(byte address) {
 
 /**
    convert from analog 16 bit to voltage
+   gain mode default yang digunkan 6.144v 16bit(15bit), 6.144v/32.768(15bit) = 0.1875V per bit
    @param analog analog 16 bit
    @return float data of voltage
 */
@@ -693,6 +707,15 @@ void print_mode() {
   if (config.useSD) {
     lcd.setCursor(15, 0); lcd.write(byte(3));
   }
+  
+  lcd.setCursor(15,1); 
+    if(!config.brokerSelector){
+      lcd.print("X");
+      lcd.setCursor(14,1);
+    }
+    #ifdef _USE_PZEM_
+      lcd.write(byte(4));
+    #endif
 }
 
 void lcdPrintCurrentDate() {
@@ -701,7 +724,7 @@ void lcdPrintCurrentDate() {
   float bat = getBatteryVoltage();
   char buff[2][16];
   sprintf(buff[0], "%d/%d/%d %d", now.Day(), now.Month(), now.Year(), csq);
-  sprintf(buff[1], "%d:%d:%d %.2fV", now.Hour(), now.Minute(), now.Second(), bat);
+  sprintf(buff[1], "%d:%d:%d %.1fV", now.Hour(), now.Minute(), now.Second(), bat);
   lcdPrint(buff[0], buff[1]);
   print_mode();
 }
@@ -753,6 +776,14 @@ void printStatus() {
   }
 }
 
+void cpyHostTxt(bool brokerSelector){
+  if(brokerSelector){
+    strncpy(config.host,brokerProduction,(strlen(brokerProduction)+1));
+  }else{
+    strncpy(config.host,brokerStaging,(strlen(brokerStaging)+1));
+  }
+}
+
 bool readConfig(fs::FS &fs, Config &config) {
   fs::File file = fs.open(CONFIG_FILENAME);
   if (!file || file.isDirectory()) {
@@ -795,11 +826,18 @@ bool readConfig(fs::FS &fs, Config &config) {
 
   config.selected_apn = doc["selected_apn"];
 
-  strlcpy(
-    config.host,
-    doc["host"] | "pakis-mosquitto.sumpahpalapa.com",
-    sizeof(config.host)
-  );
+  cpyHostTxt(config.brokerSelector);
+  // if(config.brokerSelector){
+  //   strncpy(config.host,brokerProduction,(strlen(brokerProduction)+1));
+  // }else{
+  //   strncpy(config.host,brokerStaging,(strlen(brokerStaging)+1));
+  // }
+
+  // strlcpy(
+  //   config.host,
+  //   doc["host"] | "pakis-mosquitto.sumpahpalapa.com",
+  //   sizeof(config.host)
+  // );
 
   file.close();
   config.ambilDataInterval <= 0 ? config.ambilDataInterval = 3 : config.ambilDataInterval;
@@ -2764,6 +2802,7 @@ void setup() {
   lcd.createChar(1, enter);
   lcd.createChar(2, safe);
   lcd.createChar(3, sd);
+  lcd.createChar(4, electric);
   //buat char baru untuk LCD----------
 
   lcd.backlight();
@@ -2787,7 +2826,8 @@ void setup() {
 #ifdef _USE_DEF_SERVER_
     strlcpy(setupConfig.host, brokerProduction, sizeof(setupConfig.host));
 #else
-    strlcpy(setupConfig.host, brokerStaging, sizeof(setupConfig.host));
+    // strlcpy(setupConfig.host, brokerStaging, sizeof(setupConfig.host));
+    strncpy(setupConfig.host,brokerProduction, (strlen(brokerProduction)+1));
 #endif
     setupConfig.port = 1883;
     setupConfig.kirimDataInterval = 30;
@@ -3071,15 +3111,97 @@ void setup() {
           lcd.setCursor(0, 1);
           lcd.print("after RESTART!");
           delay(1000);
-        } else if (buffer == "#pending$") {
+        } else if (buffer == "#pzemset$") {
+#ifdef _SET_PZEM_ADDR_
           selected = true; menu.levelMenu = 0;
-          delay(300);
+          int initialValue = 0;
+          interactiveInputInterval("PZEM CMD:", initialValue, 1, "cmd");
+          if(initialValue==10){
+            //erase counted energy
+            pzem.resetEnergy();
+            lcd.clear();
+            lcd.print("Energy is reset");
+            delay(1000);
+          }else if(initialValue==1){
+            //set connected pzem with address 1
+            pzem.setAddress(1);
+            lcd.clear();
+            lcd.print("PZEM addr 1 set");
+            delay(1000);
+          }else if(initialValue==2){
+            //set connected pzem with address 2
+            pzem.setAddress(2);
+            lcd.clear();
+            lcd.print("PZEM addr 2 set");
+            delay(1000);
+          }else if(initialValue==3){
+            //set connected pzem with address 3
+            pzem.setAddress(3);
+            lcd.clear();
+            lcd.print("PZEM addr 3 set");
+            delay(1000);
+          }else if(initialValue==0){
+            //check available address        
+            uint8_t address=pzem.getAddress();
+            lcd.clear();
+            lcd.printf("Add:%i",address);
+            pzem.search();
+            delay(2000);
+          }else if(initialValue==6){
+            int8_t btn = -1;
+            float v1;
+            while(btn<0){
+              v1 = pzem1.voltage();
+              isnan(v1) ? v1 = 0 : v1;
+              lcd.clear(); 
+              lcd.printf("V1:%.02f",v1);
+              btn = wait_button(0);
+              delay(500);
+            }
+            lcd.clear(); lcd.print("Done!");
+            delay(1000);
+          }else if(initialValue==7){
+            int8_t btn = -1;
+            float v1;
+            while(btn<0){
+              v1 = pzem2.voltage();
+              isnan(v1) ? v1 = 0 : v1;
+              lcd.clear(); 
+              lcd.printf("V2:%.02f",v1);
+              btn = wait_button(0);
+              delay(500);
+            }
+            lcd.clear(); lcd.print("Done!");
+            delay(1000);
+          }else if(initialValue==8){
+            int8_t btn = -1;
+            float v1;
+            while(btn<0){
+              v1 = pzem3.voltage();
+              isnan(v1) ? v1 = 0 : v1;
+              lcd.clear(); 
+              lcd.printf("V3:%.02f",v1);
+              btn = wait_button(0);
+              delay(500);
+            }
+            lcd.clear(); lcd.print("Done!");
+            delay(1000);
+          }
+          else{
+            lcd.clear();
+            lcd.print("NO CMD!");
+            delay(1000);
+            //do nothing
+          }
+          
+          /* delay(300);
           if (config.useSD) {
             cek_data_sd();
           } else {
             printSDdisabled();
           }
-          delay(300);
+          delay(300); */
+#endif
         } else if (buffer == "#rcntsent$") {
           selected = true; menu.levelMenu = 1;
           delay(300);
@@ -3179,8 +3301,7 @@ void setup() {
           setAlarmOne(config.kirimDataInterval);
           write_normal_config();
           delay(1000);
-        } else if (buffer == "#timezone$")
-        {
+        } else if (buffer == "#timezone$"){
           selected = true; menu.levelMenu = 1;
           int initialValue = config.timezone;
           interactiveInputInterval("Zona waktu:", initialValue, 1, "jam");
@@ -3212,6 +3333,7 @@ void setup() {
           int initialValue = int(config.brokerSelector);
           interactiveInputInterval("Server:", initialValue, 1, "");
           config.brokerSelector = bool(initialValue);
+          cpyHostTxt(config.brokerSelector);
 #endif
 
           bool bUpdateConfig = writeConfig(SPIFFS, config);
@@ -3237,6 +3359,9 @@ void setup() {
         if (buffer == "break" || buffer == "undefined") break;
       } else if (!initialFlag) {
         lcdPrintCurrentDate();
+        // if(!config.brokerSelector){sdfsdf;
+        //   lcd.setCursor(15, 1); lcd.print("X");
+        // }
 #ifdef _USE_STAGING_
         lcd.setCursor(15, 1); lcd.print("X");
 #endif
@@ -3563,14 +3688,18 @@ void loop() {
         lcd.setCursor(0, 1); lcd.print("No");
         lcd.setCursor(7, 1); lcd.print("Yes");
         int8_t btn = -1;
+        uint8_t limit_btn = 0;
         while (1) {
-
+          limit_btn++;
           btn = wait_button(0);
           if (btn == 0) {
             break;
           }
           else if (btn == 2) {
             close_communication();
+            break;
+          }
+          if(limit_btn>50){ //8s
             break;
           }
           delay(100);
@@ -3682,7 +3811,8 @@ void loop() {
     lcd.clear();
     lcdPrintCurrentDate(); // ---[5/12/60]---
     lcd.setCursor(10, 0); lcd.printf("|%i",recorded_aprox);
-    lcd.setCursor(0, 1); lcd.printf("[%i/%i/%i] p:%i|", config.ambilDataInterval, config.kirimDataInterval, config.time_for_broker, pending_aprox);
+    lcd.setCursor(0, 1); lcd.printf("%i/%i/%i p%i|", config.ambilDataInterval, config.kirimDataInterval, config.time_for_broker, pending_aprox);
+    
     Serial.println(device_info.my_location);
     esp_deep_sleep_start();
   }
