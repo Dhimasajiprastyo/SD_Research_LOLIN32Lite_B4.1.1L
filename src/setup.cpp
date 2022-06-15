@@ -8,7 +8,7 @@
 
 //---------------------SETUP PARAMETER------------------------------------------------------
 //#define SOFTWARE_VERSION "B3.6.8m" //UNTUK BOARD YG BELUM DIMODIF
-#define SOFTWARE_VERSION      "B3.7.8r" //UNTUK BOARD YG SUDAH DIMODIF
+#define SOFTWARE_VERSION      "B3.7.8s" //UNTUK BOARD YG SUDAH DIMODIF
 #define HARDWARE_VERSION      "BSA_IoT V3.5"
 
 #define DEVICE_LOCATION       "KENTEL_BUMI" //SESUAIKAN DENGAN NAMA LOKASI ALAT
