@@ -1,0 +1,22 @@
+Firmware Version
+X.Y.Z@
+B3.7.9a 
+{
+Y
+    6:with SD module activation
+    7:with circuit modification for stabilization improvement
+}
+{  
+Z
+    8:with PZEM access communication
+    9:with Modbus communication
+}
+{
+@
+    s: mengirimkan data dengan sd off sementara sekali dalam 30 menit, supaya dapat komunikasi dengan server saat SD main2
+}
+
+
+
+Hardware Version :
+BSA_IoT V3.5 (Modified version 3)

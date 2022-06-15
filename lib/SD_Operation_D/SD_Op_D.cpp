@@ -65,7 +65,7 @@ void SDOP::listAllDir(fs::FS &fs, const char * dirname, uint8_t levels){
 }
  */
  
-int16_t SDOP::countFile(fs::FS &fs, const char * dirname, uint8_t limit){
+int16_t SDOP::countFile(fs::FS &fs, const char * dirname, uint16_t limit){
     //Serial.printf("Listing directory: %s\n", dirname);
 
     File root = fs.open(dirname);

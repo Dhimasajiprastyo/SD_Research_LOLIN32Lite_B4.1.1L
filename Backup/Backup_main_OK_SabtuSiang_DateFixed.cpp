@@ -78,7 +78,7 @@
 #define APN_USERNAME ""
 #define APN_PASSWORD ""
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
-#define constBattery 3.5
+#define constBattery 3.378
 #define DEFAULT_WATCHDOG_TIMER 300 // 5MENIT
 #define DEFAULT_BATTERY_SAFE 11.1 //11 VOLT
 #define DEFAULT_TIME_FOR_BROKER 180 //3 MENIT
@@ -312,10 +312,10 @@ DeviceInfo device_info;
 //const size_t payloadSize = JSON_OBJECT_SIZE(5) * 3;
 // const size_t payloadSize = JSON_OBJECT_SIZE(25) + 300; //ini oke dan aman
 #ifdef _USE_PZEM_
-const size_t payloadSize = JSON_OBJECT_SIZE(25);
+  const size_t payloadSize = JSON_OBJECT_SIZE(25);
 #endif
 #ifndef _USE_PZEM_
-const size_t payloadSize = JSON_OBJECT_SIZE(7) + 210;
+  const size_t payloadSize = JSON_OBJECT_SIZE(7)+210;
 #endif
 
 // const size_t arraySize = JSON_ARRAY_SIZE(6) * 10; //gak dipake dimana mana
@@ -349,7 +349,7 @@ int8_t search_word(String& find_word, String& source) {
   const char* c_find_word = find_word.c_str();
 
   Serial.printf("-Searching word-\n%s:%i \nSize source:%i\n", c_find_word, check, total_scan);
-
+  
   if (total_scan < check) {
     Serial.println("ref kata lebih sedikit!\n");
     return -1;
@@ -424,7 +424,6 @@ float getBatteryVoltage() {
   float v;
   int16_t analogRead = readI2CAnalog(3);
   v = constBattery * (convertAnalogToVolt(analogRead));
-  // v = (convertAnalogToVolt(analogRead));
   return v;
 }
 
@@ -459,18 +458,18 @@ void setCurrentTime(uint32_t unixtime) {
 }
 
 uint32_t syncTimeUnixTime() {
-  if ((config.timezone < 7) || (config.timezone > 9)) {
+  if((config.timezone<7) || (config.timezone>9)){
     Serial.println("BUKAN TIMEZONE INDONESIA");
     lcd.clear(); lcd.print("TimezoneInvalid");
     delay(2000);
     config.timezone = DEFAULT_TIMEZONE;
   }
   String area; area.reserve(29);
-  if (config.timezone == 7) {
+  if(config.timezone == 7){
     area = "/api/timezone/Asia/Jakarta";
-  } else if (config.timezone == 8) {
+  }else if(config.timezone == 8){
     area = "/api/timezone/Asia/Makassar";
-  } else if (config.timezone == 9) {
+  }else if(config.timezone == 9){
     area = "/api/timezone/Asia/Jayapura";
   }
   const char* c_area = area.c_str();
@@ -568,9 +567,8 @@ void printData() {
     buffer[1] = filterAnalog(0);
     buffer[2] = filterAnalog(1);
     buffer[3] = filterAnalog(2);
-    float batPersentage = convertAnalogToVolt(buffer[0]) * constBattery;
-    float battery = convertAnalogToVolt(buffer[0]);
-    // float batPersentage = ((battery - 10) / 4) * 100;
+    float battery = convertAnalogToVolt(buffer[0]) * 3.35;
+    float batPersentage = ((battery - 10) / 4) * 100;
     float pressure1 = ((convertAnalogToVolt(buffer[1]) - 0.5) * 250) / 100;
     float pressure2 = ((convertAnalogToVolt(buffer[2]) - 0.5) * 250) / 100;
     float pressure3 = ((convertAnalogToVolt(buffer[3]) - 0.5) * 250) / 100;
@@ -587,7 +585,7 @@ void printData() {
     lcd.print(bufferLCD[0]);
     lcd.setCursor(0, 1);
     lcd.print(bufferLCD[1]);
-
+ 
     delay(500);
   }
 }
@@ -600,7 +598,7 @@ void printData() {
   float voltage[4];
   unsigned long timeout = millis();
   lcd.clear();
-
+  
   while (1) {
     if (millis() - timeout > PRINT_ANALOG_TIMEOUT) break;
     int buttonEvt = menu.buttonEvent();
@@ -632,8 +630,8 @@ void printData() {
     strcpy(charBuffer1, "");
     strcpy(charBuffer2, "");
   }
-  }
-*/
+}
+ */
 
 void interactiveInputInterval(const char* title, int &initialValue, byte cnt, String unit) {
   const char* c_unit = unit.c_str();
@@ -643,7 +641,7 @@ void interactiveInputInterval(const char* title, int &initialValue, byte cnt, St
   lcd.print(title);
   lcd.setCursor(0, 1);
   lcd.print("<" + String(initialValue) + ">");
-
+  
   while (1) {
     int buttonEvt = menu.buttonEvent();
     menuAction action = static_cast<menuAction>(buttonEvt);
@@ -710,15 +708,15 @@ void print_mode() {
   if (config.useSD) {
     lcd.setCursor(15, 0); lcd.write(byte(3));
   }
-
-  lcd.setCursor(15, 1);
-  if (!config.brokerSelector) {
-    lcd.print("X");
-    lcd.setCursor(14, 1);
-  }
-#ifdef _USE_PZEM_
-  lcd.write(byte(4));
-#endif
+  
+  lcd.setCursor(15,1); 
+    if(!config.brokerSelector){
+      lcd.print("X");
+      lcd.setCursor(14,1);
+    }
+    #ifdef _USE_PZEM_
+      lcd.write(byte(4));
+    #endif
 }
 
 void lcdPrintCurrentDate() {
@@ -779,11 +777,11 @@ void printStatus() {
   }
 }
 
-void cpyHostTxt(bool brokerSelector) {
-  if (brokerSelector) {
-    strncpy(config.host, brokerProduction, (strlen(brokerProduction) + 1));
-  } else {
-    strncpy(config.host, brokerStaging, (strlen(brokerStaging) + 1));
+void cpyHostTxt(bool brokerSelector){
+  if(brokerSelector){
+    strncpy(config.host,brokerProduction,(strlen(brokerProduction)+1));
+  }else{
+    strncpy(config.host,brokerStaging,(strlen(brokerStaging)+1));
   }
 }
 
@@ -792,7 +790,7 @@ bool readConfig(fs::FS &fs, Config &config) {
   if (!file || file.isDirectory()) {
     return false;
   }
-  const size_t cap = JSON_OBJECT_SIZE(20) + 400;
+  const size_t cap = JSON_OBJECT_SIZE(20)+400;
   // StaticJsonDocument<cap * 4> doc;
   StaticJsonDocument<cap> doc;
   DeserializationError error = deserializeJson(doc, file);
@@ -860,7 +858,7 @@ bool writeConfig(fs::FS &fs, Config &config) {
   fs::File file = fs.open(CONFIG_FILENAME, "w");
   if (!file) return false;
 
-  const size_t cap = JSON_OBJECT_SIZE(20) + 400;
+  const size_t cap = JSON_OBJECT_SIZE(20)+400;
   // StaticJsonDocument<cap * 4> doc;
   StaticJsonDocument<cap> doc;
   config.ambilDataInterval <= 0 ? config.ambilDataInterval = 3 : config.ambilDataInterval;
@@ -917,7 +915,7 @@ bool read_device_info(fs::FS &fs, DeviceInfo &device_info) {
   const size_t cap = JSON_OBJECT_SIZE(4) + 140;
   StaticJsonDocument<cap> doc;
   DeserializationError error = deserializeJson(doc, file);
-
+  
   if (error) return false;
   //FIELDS JSON-----------------------------------------
 
@@ -1258,7 +1256,7 @@ String serializeData(Config configs) { //PENGAMBILAN DATA SENSOR-----------
   String dateTime; dateTime.reserve(25);
   dateTime = getStringDateTime(configs.timezone);
   const char* c_dateTime = dateTime.c_str();
-  // Serial.println(c_dateTime);
+  // Serial.println(c_dateTime); 
   // Serial.println("*************");
   // sfsdf;
   // strncpy(doc["date"], c_dateTime, (strlen(c_dateTime)+1));
@@ -1299,7 +1297,7 @@ String serializeData(Config configs) { //PENGAMBILAN DATA SENSOR-----------
   serializeJson(doc, cekdata); //Hasil di monitor : {"date":"2021/08/13,16:18:03+08","UPS":3504,"dfPressure1":1892,"dfPressure2":1955,"dfPressure3":1859}
   // Serial.println(cekdata);
   // Serial.println("++");
-  String log_result; log_result.reserve(payloadSize + 1);
+  String log_result; log_result.reserve(payloadSize+1);
   log_result = cekdata;
   Serial.println(log_result);
   Serial.println("====");
@@ -1434,7 +1432,7 @@ boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool
   uint16_t total_recorded = 0;
   uint16_t total_pending = 0;
   bool useSD = config.useSD;
-  if (sd_halt) {
+  if(sd_halt){
     useSD = false;
     lcd.clear();
     lcd.print("SD_TMP_DSBLD!");
@@ -1827,9 +1825,9 @@ void recountPend(uint16_t limited) {
       sdop.createDir(SD, "/pend");
     }
     lcd.clear(); lcd.print("RECOUNT PEND...");
-    if (limited > 0) {
+    if(limited > 0){
       pending_aprox = sdop.countFile(SD, "/pend", limited);
-    } else {
+    }else{
       pending_aprox = sdop.countFile(SD, "/pend", 0);
     }
     update_sd_total_files(0, pending_aprox);
@@ -1860,9 +1858,9 @@ void recountSent(uint8_t limited) {
       sdop.createDir(SD, "/sent");
     }
     lcd.clear(); lcd.print("RECOUNT SENT...");
-    if (limited > 0) {
+    if(limited>0){
       recorded_aprox = sdop.countFile(SD, "/sent", limited);
-    } else {
+    }else{
       recorded_aprox = sdop.countFile(SD, "/sent", 0);
     }
     update_sd_total_files(1, recorded_aprox);
@@ -1927,7 +1925,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
 
   //-------Posisi SERIALIZE_DATA yang baru------------------------
   Serial.println("[LOG2SD]-SerializeData:");
-  String dataResult; dataResult.reserve(payloadSize + 1);
+  String dataResult; dataResult.reserve(payloadSize+1);
   dataResult = serializeData(config);
   const char* data = dataResult.c_str();
   // StaticJsonDocument<payloadSize> doc = serializeData(config); //ambil data sensor, simpan di doc
@@ -1938,7 +1936,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   Serial.println(data);
   Serial.println("----");
   delay(2000);
-  //-------Posisi SERIALIZE_DATA yang baru------------------------
+//-------Posisi SERIALIZE_DATA yang baru------------------------
 
   if (config.useSD || device_info.sd_failure) {
     lcd.setCursor(0, 1); lcd.print("CheckingSD|");
@@ -1973,23 +1971,23 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
     lcd.clear();
     lcd.print(pending_aprox);
     delay(1000);
-    if (pending_aprox >= 500) {
+    if(pending_aprox >= 500){
       disableSD_temporary = true;
-      clr_sent_pend(0, 50, 1);
+      clr_sent_pend(0,50,1);
     }
-    lcd.print("/");
-    lcd.print(disableSD_temporary);
-    delay(1000);
+      lcd.print("/");
+      lcd.print(disableSD_temporary);
+      delay(1000);
 
     //------------hitung isi folder sent
     recountSent(200); //untuk counting mandiri oleh alat, recount dibatasi supaya tidak makan waktu
     if ((recorded_aprox > config.SD_store_limit) && (config.SD_store_limit > 0)) { //cek kalo batas penyimpanan data terdeteksi
-      if (recorded_aprox >= 200) {
+      if(recorded_aprox>=200){
         clr_sent_pend(1, 200, 1); //ngk perlu update recorded aprox
         delay(1000);
         lcd.clear();
         lcd.print("OVER_LIMIT!");
-      } else {
+      }else{
         recorded_aprox = recorded_aprox - clr_sent_pend(1, (config.max_send * 2), 1);
         delay(1000);
         lcd.clear();
@@ -2002,18 +2000,18 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
       delay(1000);
       lcd.clear();
     }
-
-  } else if ((!config.useSD) && (config.ambilDataInterval < 7)) { //indikasi jika sd didisable secara manual
+    
+  } else if((!config.useSD)&&(config.ambilDataInterval<7)){ //indikasi jika sd didisable secara manual
     config.ambilDataInterval = 7;
     config.kirimDataInterval = 35;
     writeConfig(SPIFFS, config);
   }
 
-  //-------Posisi SERIALIZE_DATA sebelumnya------------------------
-  //-------Posisi SERIALIZE_DATA sebelumnya------------------------
+//-------Posisi SERIALIZE_DATA sebelumnya------------------------
+//-------Posisi SERIALIZE_DATA sebelumnya------------------------
 
   if (config.useSD && (!disableSD_temporary)) {
-
+ 
 
     //-----------Generate nama file baru----------
     char file_name[19]; // /pend/xxxxxxxx.txt
@@ -2088,11 +2086,6 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   //Cek apakah ada hutang kirim atau tidak-----------------
   bool okToSend = false;
   cek_battery_safe();
-  if (BatterySafeMode) {
-    lcd.clear();
-    lcd.print("SAFE MODE ON!!!");
-    delay(1000);
-  }
   if (badSignal_directSend && (!BatterySafeMode)) {
     Serial.println("Prv.badsig/drctSend_f/Log");
     SIM800SleepDisable();
@@ -2145,7 +2138,6 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   delay(400);
 }
 
-
 void testKirim() { //Fungsi tes kirim----------------
   lcd.clear();
   lcd.home();
@@ -2155,8 +2147,8 @@ void testKirim() { //Fungsi tes kirim----------------
   // byte modemStatus = setupModem(brokerSelectorF(config.brokerSelector));
   mqtt.setBufferSize(1024);
   // if (modemStatus == 0) {
-  log_toSD();
-  mqttConnect(brokerSelectorF(config.brokerSelector), 1, 0, disableSD_temporary);
+    log_toSD();
+    mqttConnect(brokerSelectorF(config.brokerSelector), 1, 0, disableSD_temporary);
   // } else if ( modemStatus == 1) {
   //   lcd.setCursor(0, 1);
   //   lcd.print("              ");
@@ -2784,9 +2776,9 @@ void setDefSettings() {
   // strlcpy(device_info.software_version, SOFTWARE_VERSION, sizeof(device_info.software_version));
   // strlcpy(device_info.my_location, c_myloc, sizeof(device_info.my_location));
   // strlcpy(device_info.my_dn, c_mydn, sizeof(device_info.my_dn));
-  strlcpy(device_info.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION) + 1));
-  strlcpy(device_info.my_dn, c_mydn, (strlen(c_mydn) + 1));
-  strncpy(device_info.my_location, c_myloc, (strlen(c_myloc) + 1));
+  strlcpy(device_info.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION)+1));
+  strlcpy(device_info.my_dn, c_mydn, (strlen(c_mydn)+1));
+  strncpy(device_info.my_location, c_myloc, (strlen(c_myloc)+1));
 
   // strlcpy(device_info.my_dn, DEVICE_ID, 14);
   writeConfig(SPIFFS, config);
@@ -2834,12 +2826,10 @@ void setup() {
   similar_message = 0;
   cmd_message = cmd_ready;
   pinMode(SD_SS, OUTPUT);
-  pinMode(27, INPUT_PULLUP);
-  // pinMode(25, INPUT_PULLDOWN);
-  // digitalWrite(25, 0);
+  pinMode(27, OUTPUT);
   digitalWrite(SD_SS, 0);
 #ifndef _FOR_WATER
-  // digitalWrite(27, 0);
+  digitalWrite(27, 0);
 #endif
 
   //----------------------------------------------
@@ -2882,8 +2872,7 @@ void setup() {
   lcd.backlight();
   lcd.clear();
   lcd.print("REBOOT!");
-  delay(1000);
-  // pinMode(25,INPUT_PULLUP); //untuk mengaktifkan reset jarak jauh
+  delay(500);
   lcd.clear();
   //--------------------------------END SETUP DASAR------------------------------
 
@@ -2902,7 +2891,7 @@ void setup() {
     strlcpy(setupConfig.host, brokerProduction, sizeof(setupConfig.host));
 #else
     // strlcpy(setupConfig.host, brokerStaging, sizeof(setupConfig.host));
-    strncpy(setupConfig.host, brokerProduction, (strlen(brokerProduction) + 1));
+    strncpy(setupConfig.host,brokerProduction, (strlen(brokerProduction)+1));
 #endif
     setupConfig.port = 1883;
     setupConfig.kirimDataInterval = 30;
@@ -2961,7 +2950,7 @@ void setup() {
   //----------------------------------------------END READ CONFIG---------------------
   Serial.println(getStringDateTime(config.timezone));
   //----------------------READ DEVICE INFO FROM SPIFFS---------------------
-
+  
   bool bdevinfo = read_device_info(SPIFFS, device_info);
   // bool bdevinfo = false;
   if (!bdevinfo) {
@@ -2977,9 +2966,9 @@ void setup() {
     Serial.println(c_mydn);
 
     setupDeviceInfo.sd_failure = true;
-    strlcpy(setupDeviceInfo.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION) + 1));
-    strlcpy(setupDeviceInfo.my_dn, c_mydn, (strlen(c_mydn) + 1));
-    strncpy(setupDeviceInfo.my_location, c_myloc, (strlen(c_myloc) + 1));
+    strlcpy(setupDeviceInfo.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION)+1));
+    strlcpy(setupDeviceInfo.my_dn, c_mydn, (strlen(c_mydn)+1));
+    strncpy(setupDeviceInfo.my_location, c_myloc, (strlen(c_myloc)+1));
     Serial.println("IN_STRLCPY-0----");
     Serial.println(setupDeviceInfo.software_version);
     Serial.println(setupDeviceInfo.my_location);
@@ -3150,10 +3139,10 @@ void setup() {
           printData();
           lcd.clear();
           //cek_spiffs();
-          /* } else if (buffer == "#analog$") {
-            selected = true;
-            menu.levelMenu = 0;
-            printAnalog(); */
+        /* } else if (buffer == "#analog$") {
+          selected = true;
+          menu.levelMenu = 0;
+          printAnalog(); */
         } else if (buffer == "#status$") {
           selected = true; menu.levelMenu = 0;
           printStatus();
@@ -3168,7 +3157,7 @@ void setup() {
           config.useSD = false;
           device_info.sd_failure = false;
           writeConfig(SPIFFS, config);
-          write_device_info(SPIFFS, device_info);
+          write_device_info(SPIFFS,device_info);
           lcd.clear();
           lcd.print("SD Disabled!");
           // delay(500);
@@ -3194,91 +3183,91 @@ void setup() {
           selected = true; menu.levelMenu = 0;
           int initialValue = 0;
           interactiveInputInterval("PZEM CMD:", initialValue, 1, "cmd");
-          if (initialValue == 10) {
+          if(initialValue==10){
             //erase counted energy
             pzem.resetEnergy();
             lcd.clear();
             lcd.print("Energy is reset");
             delay(1000);
-          } else if (initialValue == 1) {
+          }else if(initialValue==1){
             //set connected pzem with address 1
             pzem.setAddress(1);
             lcd.clear();
             lcd.print("PZEM addr 1 set");
             delay(1000);
-          } else if (initialValue == 2) {
+          }else if(initialValue==2){
             //set connected pzem with address 2
             pzem.setAddress(2);
             lcd.clear();
             lcd.print("PZEM addr 2 set");
             delay(1000);
-          } else if (initialValue == 3) {
+          }else if(initialValue==3){
             //set connected pzem with address 3
             pzem.setAddress(3);
             lcd.clear();
             lcd.print("PZEM addr 3 set");
             delay(1000);
-          } else if (initialValue == 0) {
-            //check available address
-            uint8_t address = pzem.getAddress();
+          }else if(initialValue==0){
+            //check available address        
+            uint8_t address=pzem.getAddress();
             lcd.clear();
-            lcd.printf("Add:%i", address);
+            lcd.printf("Add:%i",address);
             pzem.search();
             delay(2000);
-          } else if (initialValue == 6) {
+          }else if(initialValue==6){
             int8_t btn = -1;
             float v1;
-            while (btn < 0) {
+            while(btn<0){
               v1 = pzem1.voltage();
               isnan(v1) ? v1 = 0 : v1;
-              lcd.clear();
-              lcd.printf("V1:%.02f", v1);
+              lcd.clear(); 
+              lcd.printf("V1:%.02f",v1);
               btn = wait_button(0);
               delay(500);
             }
             lcd.clear(); lcd.print("Done!");
             delay(1000);
-          } else if (initialValue == 7) {
+          }else if(initialValue==7){
             int8_t btn = -1;
             float v1;
-            while (btn < 0) {
+            while(btn<0){
               v1 = pzem2.voltage();
               isnan(v1) ? v1 = 0 : v1;
-              lcd.clear();
-              lcd.printf("V2:%.02f", v1);
+              lcd.clear(); 
+              lcd.printf("V2:%.02f",v1);
               btn = wait_button(0);
               delay(500);
             }
             lcd.clear(); lcd.print("Done!");
             delay(1000);
-          } else if (initialValue == 8) {
+          }else if(initialValue==8){
             int8_t btn = -1;
             float v1;
-            while (btn < 0) {
+            while(btn<0){
               v1 = pzem3.voltage();
               isnan(v1) ? v1 = 0 : v1;
-              lcd.clear();
-              lcd.printf("V3:%.02f", v1);
+              lcd.clear(); 
+              lcd.printf("V3:%.02f",v1);
               btn = wait_button(0);
               delay(500);
             }
             lcd.clear(); lcd.print("Done!");
             delay(1000);
           }
-          else {
+          else{
             lcd.clear();
             lcd.print("NO CMD!");
             delay(1000);
             //do nothing
           }
-
+          
           /* delay(300);
-            if (config.useSD) {
+          if (config.useSD) {
             cek_data_sd();
-            } else {
+          } else {
             printSDdisabled();
-            }
-            delay(300); */
+          }
+          delay(300); */
 #endif
         } else if (buffer == "#rcntsent$") {
           selected = true; menu.levelMenu = 1;
@@ -3379,7 +3368,7 @@ void setup() {
           setAlarmOne(config.kirimDataInterval);
           write_normal_config();
           delay(1000);
-        } else if (buffer == "#timezone$") {
+        } else if (buffer == "#timezone$"){
           selected = true; menu.levelMenu = 1;
           int initialValue = config.timezone;
           interactiveInputInterval("Zona waktu:", initialValue, 1, "jam");
@@ -3461,7 +3450,7 @@ void setup() {
     lcd.setCursor(0, 1);
     lcd.print(DEVICE_ID);
     delay(1500);
-    SIMon = 0;
+    SIMon=0;
 
 #ifndef __NO_SYCN__ //Pertama kali hidup------------
     // RtcDateTime dt = rtc.GetDateTime();
@@ -3539,10 +3528,10 @@ void setup() {
     logCount = 0; //penanda kalau alarm 1 sudah pernah dipanggil
     cek_battery_safe();
     // uint8_t pending = sdop.countFile(SD, "/pend", 1);
-    if (config.useSD) {
-      recountPend(100);
-    } else {
-      pending_aprox = 0;
+    if(config.useSD){ 
+        recountPend(100);
+    }else{
+        pending_aprox = 0;
     }
     if (!BatterySafeMode && (pending_aprox > 0)) {
       SIM800SleepDisable();
@@ -3777,7 +3766,7 @@ void loop() {
             close_communication();
             break;
           }
-          if (limit_btn > 50) { //8s
+          if(limit_btn>50){ //8s
             break;
           }
           delay(100);
@@ -3888,8 +3877,9 @@ void loop() {
     lcd.noBacklight();
     lcd.clear();
     lcdPrintCurrentDate(); // ---[5/12/60]---
-    lcd.setCursor(10, 0); lcd.printf("|%i", recorded_aprox);
+    lcd.setCursor(10, 0); lcd.printf("|%i",recorded_aprox);
     lcd.setCursor(0, 1); lcd.printf("%i/%i/%i p%i|", config.ambilDataInterval, config.kirimDataInterval, config.time_for_broker, pending_aprox);
+    
     Serial.println(device_info.my_location);
     esp_deep_sleep_start();
   }
