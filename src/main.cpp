@@ -193,10 +193,10 @@ float pzem_value[7];
 #endif
 
 //-----------opsi APN --------------------------------------------------------------------------
-String apn_alias[8] = {"default", "Telkom1", "Telkom2", "Tri1", "Tri2", "Indosat1", "Indosat2", "Indosat3"};
-const char* apn_name[8] = {APN, "internet", "telkomsel", "3gprs", "3data", "indosatgprs", "indosatooredoo.com", "mms.satelindogprs.com"};
-const char* apn_usr[8] = {APN_USERNAME, "wap", "wap", "3gprs", "", "indosat", "indosat", "satmms"};
-const char* apn_pswd[8] = {APN_PASSWORD, "wap123", "wap123", "3gprs", "", "indosat", "indosatgprs", "satmm"};
+String apn_alias[6] = {"default", "Telkom1", "Telkom2", "Indosat1", "Indosat2", "Indosat3"};
+const char* apn_name[6] = {APN, "internet", "telkomsel", "indosatgprs", "indosatooredoo.com", "mms.satelindogprs.com"};
+const char* apn_usr[6] = {APN_USERNAME, "wap", "wap", "indosat", "indosat", "satmms"};
+const char* apn_pswd[6] = {APN_PASSWORD, "wap123", "wap123", "indosat", "indosatgprs", "satmm"};
 //-----------opsi APN -------------------------------------------------------------------------
 
 #ifdef _USE_STAGING_
@@ -286,7 +286,7 @@ struct Config {
   bool brokerSelector;
   uint8_t selected_apn;
   uint16_t SD_store_limit;
-  bool listening;
+  // bool listening;
   float battery_safe;
   uint8_t minimum_signal;
   uint16_t time_for_broker;
@@ -294,8 +294,9 @@ struct Config {
   uint8_t max_send;
   bool useSD;
   uint16_t SD_attempt;
-  uint8_t burst_send_h_on;
-  uint8_t burst_send_h_off;
+  // uint8_t burst_send_h_on;
+  // uint8_t burst_send_h_off;
+  uint8_t cnt_send_from_spiffs;
   uint8_t sync_time_interval;
   uint16_t log_cnt_auto_restart;
 };
@@ -675,38 +676,38 @@ bool cek_battery_safe() {
   }
 }
 
-bool cek_burst_mode(uint8_t on, uint8_t off) {
-  bool mode = false;
-  RtcDateTime dt = rtc.GetDateTime();
-  //--------------cek apakah dalam safe mode atau tidak----------------
+// bool cek_burst_mode(uint8_t on, uint8_t off) {
+//   bool mode = false;
+//   RtcDateTime dt = rtc.GetDateTime();
+//   //--------------cek apakah dalam safe mode atau tidak----------------
 
-  if (on > off) { //contoh 23 - 8
-    if ((dt.Hour() >= on) || (dt.Hour() < off)) {
-      mode = true;
-    } else {
-      mode = false;
-    }
-  } else if (on < off) { //contoh 10 - 20 14 15
-    if ((dt.Hour() >= on) && (dt.Hour() < off)) {
-      mode = true;
-    } else {
-      mode = false;
-    }
-  }
-  if (cek_battery_safe()) {
-    mode = false;
-  }
-  burstMode = mode;
-  return mode;
-}
+//   if (on > off) { //contoh 23 - 8
+//     if ((dt.Hour() >= on) || (dt.Hour() < off)) {
+//       mode = true;
+//     } else {
+//       mode = false;
+//     }
+//   } else if (on < off) { //contoh 10 - 20 14 15
+//     if ((dt.Hour() >= on) && (dt.Hour() < off)) {
+//       mode = true;
+//     } else {
+//       mode = false;
+//     }
+//   }
+//   if (cek_battery_safe()) {
+//     mode = false;
+//   }
+//   burstMode = mode;
+//   return mode;
+// }
 
 void print_mode() {
   if (cek_battery_safe()) {
     lcd.setCursor(14, 0); lcd.write(byte(2));
   }
-  if (cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off)) {
-    lcd.setCursor(13, 0); lcd.write(byte(1));
-  }
+  // if (cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off)) {
+  //   lcd.setCursor(13, 0); lcd.write(byte(1));
+  // }
   if (config.useSD) {
     lcd.setCursor(15, 0); lcd.write(byte(3));
   }
@@ -792,7 +793,7 @@ bool readConfig(fs::FS &fs, Config &config) {
   if (!file || file.isDirectory()) {
     return false;
   }
-  const size_t cap = JSON_OBJECT_SIZE(20) + 400;
+  const size_t cap = JSON_OBJECT_SIZE(18) + 400;
   // StaticJsonDocument<cap * 4> doc;
   StaticJsonDocument<cap> doc;
   DeserializationError error = deserializeJson(doc, file);
@@ -804,7 +805,7 @@ bool readConfig(fs::FS &fs, Config &config) {
   // config.lastSetAlarm0 = doc["lastSetAlarm0"];
   // config.lastSetAlarm1 = doc["lastSetAlarm1"];
   config.timezone = doc["timezone"];
-  config.listening = doc["listening"];
+  // config.listening = doc["listening"];
   config.battery_safe = doc["battery_safe"];
   config.minimum_signal = doc["minimum_signal"];
   config.time_for_broker = doc["time_for_broker"];
@@ -816,8 +817,9 @@ bool readConfig(fs::FS &fs, Config &config) {
   config.SD_attempt > 75 ? config.SD_attempt = 75 : config.SD_attempt;
   config.SD_attempt < 10 ? config.SD_attempt = 10 : config.SD_attempt;
   //config.SD_store_limit < 0 ? config.SD_store_limit = 0 : config.SD_store_limit;
-  config.burst_send_h_on = doc["burst_send_h_on"];
-  config.burst_send_h_off = doc["burst_send_h_off"];
+  // config.burst_send_h_on = doc["burst_send_h_on"];
+  // config.burst_send_h_off = doc["burst_send_h_off"];
+  config.cnt_send_from_spiffs = doc["cnt_send_from_spiffs"];
   config.sync_time_interval = doc["sync_time_interval"];
   config.log_cnt_auto_restart = doc["log_cnt_auto_restart"];
 
@@ -828,7 +830,6 @@ bool readConfig(fs::FS &fs, Config &config) {
 #endif
 
   config.selected_apn = doc["selected_apn"];
-
   cpyHostTxt(config.brokerSelector);
   // if(config.brokerSelector){
   //   strncpy(config.host,brokerProduction,(strlen(brokerProduction)+1));
@@ -860,7 +861,7 @@ bool writeConfig(fs::FS &fs, Config &config) {
   fs::File file = fs.open(CONFIG_FILENAME, "w");
   if (!file) return false;
 
-  const size_t cap = JSON_OBJECT_SIZE(20) + 400;
+  const size_t cap = JSON_OBJECT_SIZE(18) + 400;
   // StaticJsonDocument<cap * 4> doc;
   StaticJsonDocument<cap> doc;
   config.ambilDataInterval <= 0 ? config.ambilDataInterval = 3 : config.ambilDataInterval;
@@ -881,7 +882,7 @@ bool writeConfig(fs::FS &fs, Config &config) {
   // doc["lastSetAlarm0"] = config.lastSetAlarm0;
   // doc["lastSetAlarm1"] = config.lastSetAlarm1;
   doc["timezone"] = config.timezone;
-  doc["listening"] = config.listening;
+  // doc["listening"] = config.listening;
   doc["battery_safe"] = config.battery_safe;
   doc["minimum_signal"] = config.minimum_signal;
   doc["time_for_broker"] = config.time_for_broker;
@@ -890,8 +891,9 @@ bool writeConfig(fs::FS &fs, Config &config) {
   doc["max_send"] = config.max_send;
   doc["SD_attempt"] = config.SD_attempt;
   doc["SD_store_limit"] = config.SD_store_limit;
-  doc["burst_send_h_on"] = config.burst_send_h_on;
-  doc["burst_send_h_off"] = config.burst_send_h_off;
+  // doc["burst_send_h_on"] = config.burst_send_h_on;
+  // doc["burst_send_h_off"] = config.burst_send_h_off;
+  doc["cnt_send_from_spiffs"] = config.cnt_send_from_spiffs;
   doc["sync_time_interval"] = config.sync_time_interval;
   doc["log_cnt_auto_restart"] = config.log_cnt_auto_restart;
 
@@ -979,33 +981,33 @@ void set_burst_hour() {
   uint8_t i = 0;
   uint8_t btn = 3;
   int8_t on_off[2];
-  on_off[0] = config.burst_send_h_on;
-  on_off[1] = config.burst_send_h_off;
+  on_off[0] = config.cnt_send_from_spiffs;
+  // on_off[1] = config.burst_send_h_off;
 
   lcd.clear();
   lcd.backlight();
 
-  while (i < 2) {
+  while (i < 1) {
     lcd.clear();
     lcd.print("On=Off:Disabled");
     lcd.setCursor((i * 8), 1); lcd.print(">"); //sdfsdf
     lcd.setCursor(1, 1); lcd.print("On:");
-    lcd.setCursor(9, 1); lcd.print("Off:");
+    // lcd.setCursor(9, 1); lcd.print("Off:");
     lcd.setCursor(3, 1); lcd.print(on_off[0]);
-    lcd.setCursor(12, 1); lcd.print(on_off[1]);
+    // lcd.setCursor(12, 1); lcd.print(on_off[1]);
 
     btn = menu.buttonEvent();
     i == 0 ? lcd.setCursor(0, 3) : lcd.setCursor(0, 12);
     btn == 0 ? on_off[i]-- : on_off[i];
     btn == 1 ? on_off[i]++ : on_off[i];
-    on_off[i] > 23 ? on_off[i] = 0 : on_off[i];
-    on_off[i] < 0 ? on_off[i] = 23 : on_off[i];
+    on_off[i] > 60 ? on_off[i] = 0 : on_off[i];
+    on_off[i] < 0 ? on_off[i] = 60 : on_off[i];
     btn == 2 ? i++ : i ;
     delay(50);
   }
 
-  config.burst_send_h_on = on_off[0];
-  config.burst_send_h_off = on_off[1];
+  config.cnt_send_from_spiffs = on_off[0];
+  // config.burst_send_h_off = on_off[1];
 
   if (writeConfig(SPIFFS, config)) {
     lcd.clear();
@@ -1331,11 +1333,11 @@ String report_text(String& add_text) {
   buffer += "/";
   buffer += (String)config.kirimDataInterval;
   buffer += "|";
-  buffer += (String)config.burst_send_h_on;
-  buffer += "-";
-  buffer += (String)config.burst_send_h_off;
-  buffer += "|";
-  config.listening ? buffer += "L" : buffer += "l";
+  buffer += (String)config.cnt_send_from_spiffs;
+  buffer += "/";
+  buffer += (String)cnt_for_auto_restart;
+  // buffer += "|";
+  // config.listening ? buffer += "L" : buffer += "l";
   buffer += "|P";
   buffer += (String)pending_aprox;
   buffer += "/S";
@@ -1911,7 +1913,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   delay(500);
 
   // if ((year > 2100) || (month > 12) || (day > 31) || (hour > 23) || (minute > 59) || (config.timezone != DEFAULT_TIMEZONE)) { //sync time jika tanggal tidak wajar
-  if ((year > 2100) || (month > 12) || (day > 31) || (hour > 23) || (minute > 59)) { //sync time jika tanggal tidak wajar
+  if ((year > 2050) || (month > 12) || (day > 31) || (hour > 23) || (minute > 59)) { //sync time jika tanggal tidak wajar
     sync_time(0);
     config.brokerSelector = true;
     writeConfig(SPIFFS, config);
@@ -1925,6 +1927,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
     delay(500);
   }
 
+
   //-------Posisi SERIALIZE_DATA yang baru------------------------
   Serial.println("[LOG2SD]-SerializeData:");
   String dataResult; dataResult.reserve(payloadSize + 1);
@@ -1937,10 +1940,21 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   // serializeJson(doc, data); //Hasil di monitor : {"date":"2021/08/13,16:18:03+08","UPS":3504,"dfPressure1":1892,"dfPressure2":1955,"dfPressure3":1859}
   Serial.println(data);
   Serial.println("----");
-  delay(2000);
+  delay(500);
   //-------Posisi SERIALIZE_DATA yang baru------------------------
 
-  if (config.useSD || device_info.sd_failure) {
+  //cek apakah waktunya untuk disable sd sementara atau tidak
+  uint8_t mod_disbl_sd_tmp=0;
+  mod_disbl_sd_tmp = cnt_for_auto_restart % config.cnt_send_from_spiffs;
+  Serial.print("MOD disbl:");
+  Serial.println(mod_disbl_sd_tmp);
+  if(mod_disbl_sd_tmp == 0){
+    disableSD_temporary = true;
+  }else{
+    disableSD_temporary = false;
+  }
+
+  if (config.useSD || device_info.sd_failure || (!disableSD_temporary)) {
     lcd.setCursor(0, 1); lcd.print("CheckingSD|");
     delay(500);
     if (cekSD(12)) {
@@ -1967,8 +1981,8 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
     lcd.clear();
   }
 
-  disableSD_temporary = false;
-  if (config.useSD) { //cek jumlah pending apakah anomali (65535) atau tidak,
+  // disableSD_temporary = false;
+  if (config.useSD || (!disableSD_temporary)) { //cek jumlah pending apakah anomali (65535) atau tidak,
     recountPend(500);
     lcd.clear();
     lcd.print(pending_aprox);
@@ -2003,7 +2017,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
       lcd.clear();
     }
 
-  } else if ((!config.useSD) && (config.ambilDataInterval < 7)) { //indikasi jika sd didisable secara manual
+  } else if ((!config.useSD) && (config.ambilDataInterval < 7) && (!disableSD_temporary)) { //indikasi jika sd didisable secara manual
     config.ambilDataInterval = 7;
     config.kirimDataInterval = 35;
     writeConfig(SPIFFS, config);
@@ -2013,8 +2027,6 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   //-------Posisi SERIALIZE_DATA sebelumnya------------------------
 
   if (config.useSD && (!disableSD_temporary)) {
-
-
     //-----------Generate nama file baru----------
     char file_name[19]; // /pend/xxxxxxxx.txt
     const char* fname = file_name;
@@ -2043,7 +2055,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
       Serial.printf("%s EXIST!", fname);
     }
     !filePending ? filePending = true : filePending ; //kalo ngk ada file pending, jadikan status ada file pending
-    delay(1000);
+    delay(500);
   } else {
     if (!(SPIFFS.exists(DATA_FILENAME))) {
       sdop.deleteFile(SPIFFS, DATA_FILENAME);
@@ -2053,7 +2065,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
     String isi_dataSPIFFS = sdop.readFile(SPIFFS, DATA_FILENAME); //Baca isi file di SD
     const char* isi_from_string = isi_dataSPIFFS.c_str(); //membuat const char* dari string!!!!!
     Serial.printf("Saved2SPIFFS: %s \n", isi_from_string);
-    delay(1000);
+    delay(500);
   }
 
   esp_task_wdt_reset(); //RESET WATCHDOG TIMER-------------
@@ -2062,7 +2074,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
   lcd.clear();
   lcd.print("Checking status!");
   //cek burst send mode--------------------
-  cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off); //lansung seting burstMode
+  // cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off); //lansung seting burstMode
   //cek burst send mode--------------------
 
   if (config.useSD && (!disableSD_temporary)) {
@@ -2081,7 +2093,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
     }
   }
 
-  if (burstMode || !config.useSD || disableSD_temporary) { //kalau burst mode aktif atau tidak menggunakan SD card, jadi langsung kirim
+  if (!config.useSD || disableSD_temporary) { //kalau burst mode aktif atau tidak menggunakan SD card, jadi langsung kirim
     badSignal_directSend = true; //pinjam bad signal untuk memicu pengiriman saat burst mode
     Serial.println("burst/notuseSD/DsblSDtmp");
   }
@@ -2177,7 +2189,8 @@ String config_and_devinfo_status() {
   isi_status += ",";
   isi_status += sdop.readFile(SPIFFS, DEVICE_INFO_FILENAME);
   isi_status += "]}";
-  //Serial.println(isi_status);
+  Serial.print("HASIL STATUS!");
+  Serial.println(isi_status);
   return isi_status;
 }
 
@@ -2768,11 +2781,12 @@ void setDefSettings() {
   const char *c_mydn = mydn.c_str();
   Serial.println(c_myloc);
 
-  config.time_for_broker = 180;
+  config.time_for_broker = 120;
   config.watchdog_timer = 300;
   config.SD_attempt = 42;
   config.max_send = 25;
-  config.listening = true;
+  config.cnt_send_from_spiffs = 6; // setiap 6 kali pengambilan data, alat akan disable temporary SD dan mengirimkan data dari SPIFFS, sehingga bisa listening k broker
+  // config.listening = true;
   config.SD_store_limit = 100; //(3hari)
   config.ambilDataInterval = 5;
   config.kirimDataInterval = 30;
@@ -2911,14 +2925,14 @@ void setup() {
     setupConfig.brokerSelector = true;
     setupConfig.battery_safe = DEFAULT_BATTERY_SAFE;
     setupConfig.selected_apn = 0;
-    setupConfig.listening = true;
+    // setupConfig.listening = true;
     setupConfig.minimum_signal = 7;
     setupConfig.time_for_broker = DEFAULT_TIME_FOR_BROKER;
     setupConfig.watchdog_timer = DEFAULT_WATCHDOG_TIMER;
     setupConfig.max_send = 25;
     setupConfig.useSD = true;
     setupConfig.SD_attempt = 55;
-    setupConfig.listening = true;
+    // setupConfig.listening = true;
     setupConfig.log_cnt_auto_restart = 260;
     setupConfig.sync_time_interval = 8;
 
@@ -3745,17 +3759,17 @@ void loop() {
         } else if (count_wait_me >= int_limit_wait_me) {
           close_communication();
         } else {
-          if (!config.listening) { //cek apa perlu always listening atau tidak, setidaknya wait broker initiaded true, supaya hanya saat alarm one ini dieksekusi, alarm 2 tidak
-            if ((!(cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off))) && (config.burst_send_h_on != config.burst_send_h_off)) { //jika tidak dalam burst mode, maka jangan komunikasi, jika burst mode off maka komunikasi terus
-              //wait_for_broker = false;
-              close_communication();
-              Serial.println("I'M NOT LISTENING BROKER!");
-            }
-          } else {
+          // if (!config.listening) { //cek apa perlu always listening atau tidak, setidaknya wait broker initiaded true, supaya hanya saat alarm one ini dieksekusi, alarm 2 tidak
+          //   if ((!(cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off))) && (config.burst_send_h_on != config.burst_send_h_off)) { //jika tidak dalam burst mode, maka jangan komunikasi, jika burst mode off maka komunikasi terus
+          //     //wait_for_broker = false;
+          //     close_communication();
+          //     Serial.println("I'M NOT LISTENING BROKER!");
+          //   }
+          // } else {
             count_wait_me = 0;
             mqtt.disconnect();
             delay(1500); //kasi waktu buat diskonek
-          }
+          // }
         }
         Serial.printf("CMD_MSG:%i\n", cmd_message);
       }
@@ -3819,8 +3833,8 @@ void loop() {
       mqtt.unsubscribe(CMD_TOPIC);
 
       // bool in_burst_mode = cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off);
-      bool burst_mode_off = false;
-      config.burst_send_h_off == config.burst_send_h_on ? burst_mode_off = true : burst_mode_off = false;
+      // bool burst_mode_off = false;
+      // config.burst_send_h_off == config.burst_send_h_on ? burst_mode_off = true : burst_mode_off = false;
       // bool rapid = false;
       // if (in_burst_mode || (!config.useSD)) {
       //   rapid = true;
@@ -3891,6 +3905,7 @@ void loop() {
     lcd.setCursor(10, 0); lcd.printf("|%i", recorded_aprox);
     lcd.setCursor(0, 1); lcd.printf("%i/%i/%i p%i|", config.ambilDataInterval, config.kirimDataInterval, config.time_for_broker, pending_aprox);
     Serial.println(device_info.my_location);
+    Serial.println(config.host);
     esp_deep_sleep_start();
   }
 }
