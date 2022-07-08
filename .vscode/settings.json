@@ -3,5 +3,6 @@
         "*.tpp": "cpp",
         "cmath": "cpp",
         "string": "cpp"
-    }
+    },
+    "cmake.configureOnOpen": true
 }
