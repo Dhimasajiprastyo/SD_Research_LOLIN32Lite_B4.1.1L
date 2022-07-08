@@ -1,3 +1,4 @@
+#pragma region include_libraries
 #include <Arduino.h>
 #include <Wire.h>
 #include <WiFi.h>
@@ -15,24 +16,45 @@
 #include "SPI.h"
 #include "SD_Op_D.h"
 #include "string.h"
-
 #include <esp_task_wdt.h>
 
 #define TINY_GSM_MODEM_SIM800
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 #include "setup.cpp"
+#pragma endregion include_libraries
 
 //===========================PENTING==============================================
-//--------DEFINE ACTIVATION-----------
-#define __NO_SYCN__
-// #define _USE_DEF_SERVER_
+#define __NO_SYCN__ //NO NEED TO SYNC TIME EVERY HARD RESET
 //===========================PENTING==============================================
+
+#ifdef _ACTIVATE_SENSOR_SERIAL1_
+  #define sensor_serial1 Serial1
+#endif
 
 #ifdef _USE_PZEM_
 #include <PZEM004Tv30.h>
+// #if defined (_DIRECT_PZEM_)
+// // #define pzem_serial Serial1
+// #elif defined (_USE_SLAVE_)
+// #define slave_serial Serial1
+// #endif
 #endif
 
+#ifdef _USE_ULTRASONIC_FLOW_METER_
+#include <ModbusMaster.h>
+#define flow_addr 4
+// #define flow_register 1436
+#define flow_register 0
+#define cubic_register 112
+// #if defined (_DIRECT_ULTRASONIC_FLOW_METER_)
+// // #define flow_serial Serial1
+// #elif defined (_USE_SLAVE_)
+// #define slave_serial Serial1
+// #endif
+#endif
+
+#pragma region general_define
 #ifndef DEVICE_ID
 #define DEVICE_ID "tester"
 #endif
@@ -44,7 +66,6 @@
 #endif
 
 #define DEVICE_TYPE 2
-
 #if DEVICE_TYPE == 2
 #define SDA_PIN 13
 #define SCK_PIN 22
@@ -58,7 +79,6 @@
 #define BUTTON1 34
 #define BUTTON2 35
 #define BUTTON3 32
-// #define TIMEZONE 8
 #define BAUDRATE 115200
 #define GSM_BAUDRATE 9600
 #define I2C_ADC0_ADDRESS 0x48
@@ -67,7 +87,7 @@
 #define I2C_LCD_ADDRESS 0x27
 #define TOUCH_TRESHOLD 50
 #define BUTTON_BITMASK 0xD00000000
-#define TINY_GSM_MODEM_SIM800
+// #define TINY_GSM_MODEM_SIM800
 #define DEBOUNCE_TIME 50
 #define WAKE_UP_TIME 25000
 #define PRINT_ANALOG_TIMEOUT 60000
@@ -78,24 +98,19 @@
 #define APN_USERNAME ""
 #define APN_PASSWORD ""
 #define uS_TO_S_FACTOR 1000000  /* Conversion factor for micro seconds to seconds */
-#define constBattery 3.5
+#define constBattery 3.378
 #define DEFAULT_WATCHDOG_TIMER 300 // 5MENIT
 #define DEFAULT_BATTERY_SAFE 11.1 //11 VOLT
 #define DEFAULT_TIME_FOR_BROKER 180 //3 MENIT
-#define ANS_STATUS_LENGTH 770 //Jumlah karakter answer status broker, sebelumnya 750 / 921
+#define ANS_STATUS_LENGTH 770 //Jumlah karakter answer status broker, sebelumnya 750
 #define LIMIT_SIMILAR_MESSAGE 8 //mencegah pesan yang sama dari retain message untuk diproses dalam 1 sesi komunikasi
 #define DEFAULT_SYNCTIME_INTERVAL 8
-
-#if defined (_DIRECT_PZEM_)
-#define pzem_serial Serial1
-#elif defined (_USE_SLAVE_)
-#define slave_serial Serial1
-#endif
+#pragma endregion general_define
 
 #define SD_SS 14
 //=========================================================================
 
-
+#pragma region object_generation
 // Define instance here---------------------------------------------------
 Adafruit_ADS1115 ADC0(I2C_ADC0_ADDRESS);
 Adafruit_ADS1115 ADC1(I2C_ADC1_ADDRESS);
@@ -107,7 +122,7 @@ TinyGsmClient client(modem);
 PubSubClient mqtt(client);
 HttpClient httpTime(client, "worldtimeapi.org", 80);
 
-#ifdef _DIRECT_PZEM_
+#ifdef _USE_PZEM_
 // pzem(&slave_serial);
 /**
    level tegangan serial master(ESP32) : 3.3v
@@ -116,14 +131,20 @@ HttpClient httpTime(client, "worldtimeapi.org", 80);
    PZEM(TX)------(RX)ESP
    PZEM(RX)------(TX)ESP
 */
-PZEM004Tv30 pzem(&pzem_serial);
-PZEM004Tv30 pzem1(&pzem_serial, 1);
-PZEM004Tv30 pzem2(&pzem_serial, 2);
-PZEM004Tv30 pzem3(&pzem_serial, 3);
+PZEM004Tv30 pzem(&sensor_serial1);
+PZEM004Tv30 pzem1(&sensor_serial1, 1);
+PZEM004Tv30 pzem2(&sensor_serial1, 2);
+PZEM004Tv30 pzem3(&sensor_serial1, 3);
+#endif
+
+#ifdef _USE_ULTRASONIC_FLOW_METER_
+ModbusMaster flow_modbus;
 #endif
 
 SDOP sdop; //SD operation
+#pragma endregion object_generation
 
+#pragma region enum_generation
 enum opsi_broker {
   cmd_ready,
   cmd_wait_me,
@@ -144,9 +165,9 @@ enum cmd_code {
   code_cancle_recount_sent, code_cancle_recount_pend, code_custom_config, code_print_custom_config,
   code_recheck_sd, code_close_cmd, code_not_found
 };
+#pragma endregion enum_generation
 
-//-------------------------------------------------------------------------
-
+#pragma region global_variables
 // Define Global Variable here
 RTC_DATA_ATTR uint8_t logCount = 0;
 RTC_DATA_ATTR uint16_t recorded_aprox = 0;
@@ -181,7 +202,9 @@ bool recount_sent = 0;
 bool recount_pend = 0;
 int8_t prev_cmd_code = -1;
 uint8_t similar_message = 0;
+unsigned long lcdRefresh;
 bool disableSD_temporary = false;
+#pragma endregion global_variables
 
 /**
    format array sensor dari slave
@@ -189,24 +212,17 @@ bool disableSD_temporary = false;
   //0   1   2   3   4   5   |6    7   8   9   10  11  |12   13  14  15  16  17  |18   19  20  21  22  23    24    25
 */
 #ifdef _DIRECT_PZEM_
-float pzem_value[7];
+//float pzem_value[7];
 #endif
 
 //-----------opsi APN --------------------------------------------------------------------------
-String apn_alias[6] = {"default", "Telkom1", "Telkom2", "Indosat1", "Indosat2", "Indosat3"};
-const char* apn_name[6] = {APN, "internet", "telkomsel", "indosatgprs", "indosatooredoo.com", "mms.satelindogprs.com"};
-const char* apn_usr[6] = {APN_USERNAME, "wap", "wap", "indosat", "indosat", "satmms"};
-const char* apn_pswd[6] = {APN_PASSWORD, "wap123", "wap123", "indosat", "indosatgprs", "satmm"};
+String apn_alias[8] = {"default", "Telkom1", "Telkom2", "Tri1", "Tri2", "Indosat1", "Indosat2", "Indosat3"};
+const char* apn_name[8] = {APN, "internet", "telkomsel", "3gprs", "3data", "indosatgprs", "indosatooredoo.com", "mms.satelindogprs.com"};
+const char* apn_usr[8] = {APN_USERNAME, "wap", "wap", "3gprs", "", "indosat", "indosat", "satmms"};
+const char* apn_pswd[8] = {APN_PASSWORD, "wap123", "wap123", "3gprs", "", "indosat", "indosatgprs", "satmm"};
 //-----------opsi APN -------------------------------------------------------------------------
 
-#ifdef _USE_STAGING_
-// char *brokerStaging = "pakis-mqtt.pdampintar.id";
-// char *brokerProduction = "pakis-mqtt.pdampintar.id"; //biar ngk ngubah2 program di bawah lagi, jd ubah sementara disini
-const char *brokerStaging = "pakis-mqtt.sumpahpalapa.com";
-const char *brokerProduction = "pakis-mqtt.sumpahpalapa.com";
-// char *brokerStaging = "pakis-mqtt.iotsakti.id";
-// char *brokerProduction = "pakis-mqtt.iotsakti.id";
-#else
+#pragma region server_name_settings
 //char *brokerStaging = "34.101.187.36";
 const char *brokerStaging = "pakis-mqtt.sumpahpalapa.com";
 const char *brokerProduction = "pakis-mqtt.pdampintar.id";
@@ -214,13 +230,9 @@ const char *brokerProduction = "pakis-mqtt.pdampintar.id";
 // char *brokerProduction = "34.87.0.141";
 // const char *brokerStaging = "pakis-mqtt.iotsakti.id";
 // const char *brokerProduction = "pakis-mqtt.iotsakti.id";
-#endif
+#pragma endregion server_name_settings
 
-#ifdef _DOUBLE_SERVER_
-char *another_staging = "34.101.187.36";
-#endif
-
-unsigned long lcdRefresh;
+#pragma region new_lcd_characters
 byte Lock[8] = {
   0b01110,
   0b10001,
@@ -265,6 +277,18 @@ byte sd[8] = {
   0b11111
 };
 
+#ifdef _SET_FLOW_ELECTRIC_ICON_
+byte electric[8] = {
+  0b00011,
+  0b11111,
+  0b01100,
+  0b11111,
+  0b00011,
+  0b11111,
+  0b01100,
+  0b11000
+};
+#else
 byte electric[8] = {
   0b00011,
   0b00110,
@@ -275,8 +299,12 @@ byte electric[8] = {
   0b01100,
   0b11000
 };
+#endif
 
 
+#pragma endregion new_lcd_characters
+
+#pragma region new_structures
 struct Config {
   char host[34];
   int port;
@@ -309,6 +337,7 @@ struct DeviceInfo {
   char my_location[40];
 };
 DeviceInfo device_info;
+#pragma endregion new_structures
 
 //const size_t payloadSize = JSON_OBJECT_SIZE(5) * 3;
 // const size_t payloadSize = JSON_OBJECT_SIZE(25) + 300; //ini oke dan aman
@@ -322,6 +351,10 @@ const size_t payloadSize = JSON_OBJECT_SIZE(7) + 210;
 // const size_t arraySize = JSON_ARRAY_SIZE(6) * 10; //gak dipake dimana mana
 // uint32_t lastReconnectAttempt = 0;
 uint32_t waitingData = 0;
+
+
+
+
 
 //-------------------------------------------------------------------------------------------------------
 void stopWDT() {
@@ -425,7 +458,6 @@ float getBatteryVoltage() {
   float v;
   int16_t analogRead = readI2CAnalog(3);
   v = constBattery * (convertAnalogToVolt(analogRead));
-  // v = (convertAnalogToVolt(analogRead));
   return v;
 }
 
@@ -554,6 +586,7 @@ int16_t filterAnalog(byte analogPin) {
   int16_t buffer;
   for (int i = 0; i < 20; i++) {
     buffer = kalman.updateEstimate(readI2CAnalog(analogPin));
+    delay(25);
   }
   return buffer;
 }
@@ -569,9 +602,8 @@ void printData() {
     buffer[1] = filterAnalog(0);
     buffer[2] = filterAnalog(1);
     buffer[3] = filterAnalog(2);
-    float batPersentage = convertAnalogToVolt(buffer[0]) * constBattery;
-    float battery = convertAnalogToVolt(buffer[0]);
-    // float batPersentage = ((battery - 10) / 4) * 100;
+    float battery = convertAnalogToVolt(buffer[0]) * 3.35;
+    float batPersentage = ((battery - 10) / 4) * 100;
     float pressure1 = ((convertAnalogToVolt(buffer[1]) - 0.5) * 250) / 100;
     float pressure2 = ((convertAnalogToVolt(buffer[2]) - 0.5) * 250) / 100;
     float pressure3 = ((convertAnalogToVolt(buffer[3]) - 0.5) * 250) / 100;
@@ -667,6 +699,8 @@ void interactiveInputInterval(const char* title, int &initialValue, byte cnt, St
 
 bool cek_battery_safe() {
   float v_bat = getBatteryVoltage();
+  Serial.print("VBAT:");
+  Serial.println(v_bat);
   if (v_bat <= config.battery_safe) {
     BatterySafeMode = true;
     return true;
@@ -676,30 +710,30 @@ bool cek_battery_safe() {
   }
 }
 
-// bool cek_burst_mode(uint8_t on, uint8_t off) {
-//   bool mode = false;
-//   RtcDateTime dt = rtc.GetDateTime();
-//   //--------------cek apakah dalam safe mode atau tidak----------------
+bool cek_burst_mode(uint8_t on, uint8_t off) {
+  bool mode = false;
+  RtcDateTime dt = rtc.GetDateTime();
+  //--------------cek apakah dalam safe mode atau tidak----------------
 
-//   if (on > off) { //contoh 23 - 8
-//     if ((dt.Hour() >= on) || (dt.Hour() < off)) {
-//       mode = true;
-//     } else {
-//       mode = false;
-//     }
-//   } else if (on < off) { //contoh 10 - 20 14 15
-//     if ((dt.Hour() >= on) && (dt.Hour() < off)) {
-//       mode = true;
-//     } else {
-//       mode = false;
-//     }
-//   }
-//   if (cek_battery_safe()) {
-//     mode = false;
-//   }
-//   burstMode = mode;
-//   return mode;
-// }
+  if (on > off) { //contoh 23 - 8
+    if ((dt.Hour() >= on) || (dt.Hour() < off)) {
+      mode = true;
+    } else {
+      mode = false;
+    }
+  } else if (on < off) { //contoh 10 - 20 14 15
+    if ((dt.Hour() >= on) && (dt.Hour() < off)) {
+      mode = true;
+    } else {
+      mode = false;
+    }
+  }
+  if (cek_battery_safe()) {
+    mode = false;
+  }
+  burstMode = mode;
+  return mode;
+}
 
 void print_mode() {
   if (cek_battery_safe()) {
@@ -805,7 +839,6 @@ bool readConfig(fs::FS &fs, Config &config) {
   // config.lastSetAlarm0 = doc["lastSetAlarm0"];
   // config.lastSetAlarm1 = doc["lastSetAlarm1"];
   config.timezone = doc["timezone"];
-  // config.listening = doc["listening"];
   config.battery_safe = doc["battery_safe"];
   config.minimum_signal = doc["minimum_signal"];
   config.time_for_broker = doc["time_for_broker"];
@@ -882,7 +915,6 @@ bool writeConfig(fs::FS &fs, Config &config) {
   // doc["lastSetAlarm0"] = config.lastSetAlarm0;
   // doc["lastSetAlarm1"] = config.lastSetAlarm1;
   doc["timezone"] = config.timezone;
-  // doc["listening"] = config.listening;
   doc["battery_safe"] = config.battery_safe;
   doc["minimum_signal"] = config.minimum_signal;
   doc["time_for_broker"] = config.time_for_broker;
@@ -909,7 +941,6 @@ bool writeConfig(fs::FS &fs, Config &config) {
   file.close();
   return true;
 }
-
 
 bool read_device_info(fs::FS &fs, DeviceInfo &device_info) {
   fs::File file = fs.open(DEVICE_INFO_FILENAME);
@@ -1020,6 +1051,7 @@ void set_burst_hour() {
   delay(1000);
   lcd.clear();
 }
+
 
 bool wait_for_signal(uint16_t second, uint8_t minimumSignal) {
   if (!SIMon) { //jika sim lupa dienable--------
@@ -1188,9 +1220,68 @@ String serializeData(Config configs) { //PENGAMBILAN DATA SENSOR-----------
   uint16_t batrei = filterAnalog(3); //kalau step up dinyalakan sebelum ambil ambil data analog ups, nilai ups selalu 0
   int P1 = filterAnalog(0);
 
+  #ifdef _USE_ULTRASONIC_FLOW_METER_
+    float flow_value = 0;
+    float kubikasi = 0;
+  #endif
+
 #ifdef _USE_ALL_PRESSURE_
   int P2 = filterAnalog(1);
   int P3 = filterAnalog(2);
+#endif
+
+#ifdef _USE_ULTRASONIC_FLOW_METER_
+  uint8_t result, datasize = 2; //datasize 2
+  flow_modbus.clearTransmitBuffer();
+  flow_modbus.clearResponseBuffer();
+  result = flow_modbus.readHoldingRegisters(flow_register, datasize); //0 start address for flow data, 2 is total number of register to be rad
+  if (result == flow_modbus.ku8MBSuccess)
+  {
+    uint8_t j;
+    uint16_t buf[datasize];
+    Serial.println("Success! Processing...");
+    for (j = 0; j < datasize; j++)
+    {
+      buf[j] = flow_modbus.getResponseBuffer(j);
+      Serial.print(buf[j]);
+      Serial.print(" ");
+    }
+    Serial.println("<- done");
+    memcpy(&flow_value, &buf, sizeof(float));
+    // memcpy(&flow_value, &buf, sizeof(int16_t));
+    Serial.print("Flow m3/h :");
+    // Serial.println("unit is ");
+    Serial.println(flow_value, 6);
+    Serial.print("Flow l/s :");
+    flow_value = flow_value / 3.6;
+    Serial.println(flow_value, 6);
+    // Serial.println(flow_value);
+  }
+  delay(100);
+  //------------baca kubikasi air---------------
+  result = 0;
+  flow_modbus.clearTransmitBuffer();
+  flow_modbus.clearResponseBuffer();
+  result = flow_modbus.readHoldingRegisters(cubic_register, datasize); //0 start address for flow data, 2 is total number of register to be rad
+  Serial.println(result);
+  if (result == flow_modbus.ku8MBSuccess)
+  {
+    uint8_t j;
+    uint16_t buf[datasize];
+    Serial.println("Success! Processing...");
+    for (j = 0; j < datasize; j++)
+    {
+      buf[j] = flow_modbus.getResponseBuffer(j);
+      Serial.print(buf[j]);
+      Serial.print(" ");
+    }
+    Serial.println("<- done");
+    memcpy(&kubikasi, &buf, sizeof(float));
+    // memcpy(&flow_value, &buf, sizeof(int16_t));
+    Serial.print("Volume m3 :");
+    // Serial.println("unit is ");
+    Serial.println(kubikasi, 2);
+  }
 #endif
 
 #ifdef _USE_PZEM_
@@ -1260,10 +1351,6 @@ String serializeData(Config configs) { //PENGAMBILAN DATA SENSOR-----------
   String dateTime; dateTime.reserve(25);
   dateTime = getStringDateTime(configs.timezone);
   const char* c_dateTime = dateTime.c_str();
-  // Serial.println(c_dateTime);
-  // Serial.println("*************");
-  // sfsdf;
-  // strncpy(doc["date"], c_dateTime, (strlen(c_dateTime)+1));
   doc["date"] = c_dateTime;
   doc["UPS"] = batrei;
   doc["dfPressure1"] = P1;
@@ -1290,13 +1377,19 @@ String serializeData(Config configs) { //PENGAMBILAN DATA SENSOR-----------
   doc["f3"] = f3;
 #endif
 
+#ifdef _USE_ULTRASONIC_FLOW_METER_
+  doc["flow"] = flow_value;
+  doc["water_h"] = kubikasi;
+#endif
+
 
   doc["Signal"] = signal;
-  /* doc["flow"] = flow;
+  /*
     doc["water_h"] = h_water;
-    doc["Stanmeter"] = stan;
+    doc["Stanmeter"] = kubikasi;
     doc["Light"] = light; */
 
+  // return doc;
   char cekdata[payloadSize];
   serializeJson(doc, cekdata); //Hasil di monitor : {"date":"2021/08/13,16:18:03+08","UPS":3504,"dfPressure1":1892,"dfPressure2":1955,"dfPressure3":1859}
   // Serial.println(cekdata);
@@ -1349,6 +1442,7 @@ String report_text(String& add_text) {
   buffer += "\"}";
   return buffer;
 }
+
 
 void update_sd_total_files(bool sent, uint16_t new_total) {
   String total; total.reserve(28);
@@ -1405,6 +1499,7 @@ uint16_t read_sd_approx_sent_pend(bool sent) {
   return total_approx;
 }
 
+// boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected) { //JANGAN LUPA KASI WATCHDOG TIMER DI SINI, KRN BISA SAJA MACET SAAT BACA SD----
 boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool sd_halt) { //JANGAN LUPA KASI WATCHDOG TIMER DI SINI, KRN BISA SAJA MACET SAAT BACA SD----
   if (init_wdt) {
     //------------SET WDT--------------JAGA2 KALAU HANG-------------
@@ -1821,6 +1916,7 @@ void sync_time(bool set_alarm) {
   }
 }
 
+// void recountPend() {
 void recountPend(uint16_t limited) {
   if (config.useSD) {
     stopWDT();
@@ -2098,13 +2194,27 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
     Serial.println("burst/notuseSD/DsblSDtmp");
   }
   //Cek apakah ada hutang kirim atau tidak-----------------
+  
+  // bool okToSend = false;
+  // cek_battery_safe();
+  // if (BatterySafeMode) {
+  //   lcd.clear();
+  //   lcd.print("SAFE MODE ON!!!");
+  //   Serial.println("SAFEMODE!");
+  //   delay(1000);
+  // }
   bool okToSend = false;
-  cek_battery_safe();
-  if (BatterySafeMode) {
-    lcd.clear();
-    lcd.print("SAFE MODE ON!!!");
-    delay(1000);
+  uint8_t ix = 0;
+  for(ix=0;ix<3;ix++){
+    cek_battery_safe();
+    if (BatterySafeMode) {
+      lcd.clear();
+      lcd.print("SAFE MODE ON!!!");
+      Serial.println("SAFEMODE!");
+      delay(500);
+    }
   }
+
   if (badSignal_directSend && (!BatterySafeMode)) {
     Serial.println("Prv.badsig/drctSend_f/Log");
     SIM800SleepDisable();
@@ -2158,6 +2268,7 @@ void log_toSD() { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HAN
 }
 
 
+
 void testKirim() { //Fungsi tes kirim----------------
   lcd.clear();
   lcd.home();
@@ -2168,6 +2279,7 @@ void testKirim() { //Fungsi tes kirim----------------
   mqtt.setBufferSize(1024);
   // if (modemStatus == 0) {
   log_toSD();
+  // mqttConnect(brokerSelectorF(config.brokerSelector), 1, 0);
   mqttConnect(brokerSelectorF(config.brokerSelector), 1, 0, disableSD_temporary);
   // } else if ( modemStatus == 1) {
   //   lcd.setCursor(0, 1);
@@ -2189,8 +2301,7 @@ String config_and_devinfo_status() {
   isi_status += ",";
   isi_status += sdop.readFile(SPIFFS, DEVICE_INFO_FILENAME);
   isi_status += "]}";
-  Serial.print("HASIL STATUS!");
-  Serial.println(isi_status);
+  //Serial.println(isi_status);
   return isi_status;
 }
 
@@ -2770,7 +2881,6 @@ bool begin_spiffs() {
   //-----------------------------------------
 }
 
-
 void setDefSettings() {
   lcd.clear(); lcd.print("Reset config...");
   String myloc; myloc.reserve(40);
@@ -2786,7 +2896,7 @@ void setDefSettings() {
   config.SD_attempt = 42;
   config.max_send = 25;
   config.cnt_send_from_spiffs = 6; // setiap 6 kali pengambilan data, alat akan disable temporary SD dan mengirimkan data dari SPIFFS, sehingga bisa listening k broker
-  // config.listening = true;
+
   config.SD_store_limit = 100; //(3hari)
   config.ambilDataInterval = 5;
   config.kirimDataInterval = 30;
@@ -2795,9 +2905,6 @@ void setDefSettings() {
   config.sync_time_interval = DEFAULT_SYNCTIME_INTERVAL; // sync di jam 12 malam saja sekali
   config.log_cnt_auto_restart = 250;
 
-  // strlcpy(device_info.software_version, SOFTWARE_VERSION, sizeof(device_info.software_version));
-  // strlcpy(device_info.my_location, c_myloc, sizeof(device_info.my_location));
-  // strlcpy(device_info.my_dn, c_mydn, sizeof(device_info.my_dn));
   strlcpy(device_info.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION) + 1));
   strlcpy(device_info.my_dn, c_mydn, (strlen(c_mydn) + 1));
   strncpy(device_info.my_location, c_myloc, (strlen(c_myloc) + 1));
@@ -2849,23 +2956,32 @@ void setup() {
   cmd_message = cmd_ready;
   pinMode(SD_SS, OUTPUT);
   pinMode(27, INPUT_PULLUP);
-  // pinMode(25, INPUT_PULLDOWN);
-  // digitalWrite(25, 0);
   digitalWrite(SD_SS, 0);
 #ifndef _FOR_WATER
   // digitalWrite(27, 0);
 #endif
 
-  //----------------------------------------------
+  #pragma region serial_begin_for_addon
 #ifdef _USE_SLAVE_
   slave_serial.begin(9600);
 #endif
 
+#ifdef _ACTIVATE_SENSOR_SERIAL1_
+  // #define sensor_serial1 Serial1
+  sensor_serial1.begin(9600, SERIAL_8N1, 15, 2);
+#endif
+
 #ifdef _USE_PZEM_
 #ifdef _DIRECT_PZEM_
-  pzem_serial.begin(9600, SERIAL_8N1, 15, 2);
+  // pzem_serial.begin(9600, SERIAL_8N1, 15, 2);
 #endif
 #endif
+
+#ifdef _USE_ULTRASONIC_FLOW_METER_
+  // flow_serial.begin(9600, SERIAL_8N1, 15, 2);
+  flow_modbus.begin(flow_addr, sensor_serial1);
+#endif
+  #pragma endregion serial_begin_for_addon
 
   Serial.begin(BAUDRATE);
   Serial2.begin(GSM_BAUDRATE, SERIAL_8N1);
@@ -2897,7 +3013,6 @@ void setup() {
   lcd.clear();
   lcd.print("REBOOT!");
   delay(1000);
-  // pinMode(25,INPUT_PULLUP); //untuk mengaktifkan reset jarak jauh
   lcd.clear();
   //--------------------------------END SETUP DASAR------------------------------
 
@@ -2925,14 +3040,13 @@ void setup() {
     setupConfig.brokerSelector = true;
     setupConfig.battery_safe = DEFAULT_BATTERY_SAFE;
     setupConfig.selected_apn = 0;
-    // setupConfig.listening = true;
+    setupConfig.cnt_send_from_spiffs = 6;
     setupConfig.minimum_signal = 7;
     setupConfig.time_for_broker = DEFAULT_TIME_FOR_BROKER;
     setupConfig.watchdog_timer = DEFAULT_WATCHDOG_TIMER;
     setupConfig.max_send = 25;
     setupConfig.useSD = true;
     setupConfig.SD_attempt = 55;
-    // setupConfig.listening = true;
     setupConfig.log_cnt_auto_restart = 260;
     setupConfig.sync_time_interval = 8;
 
@@ -3185,7 +3299,6 @@ void setup() {
           write_device_info(SPIFFS, device_info);
           lcd.clear();
           lcd.print("SD Disabled!");
-          // delay(500);
           // lcd.setCursor(0, 1);
           // if (device_info.sd_failure) {
           //   lcd.print("SD_FAILED!");
@@ -3234,9 +3347,11 @@ void setup() {
             delay(1000);
           } else if (initialValue == 0) {
             //check available address
-            uint8_t address = pzem.getAddress();
-            lcd.clear();
-            lcd.printf("Add:%i", address);
+            Serial.println("-----------------");
+            // uint8_t address = pzem.getAddress();
+            // lcd.clear();
+            // lcd.printf("Add:%i", address);
+            Serial.println("---___---___");
             pzem.search();
             delay(2000);
           } else if (initialValue == 6) {
