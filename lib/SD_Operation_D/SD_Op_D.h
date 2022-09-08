@@ -13,7 +13,7 @@ class SDOP{
         int16_t         countFile(fs::FS &fs, const char * dirname, uint16_t limit);
         void            createDir(fs::FS &fs, const char * path);
         void            removeDir(fs::FS &fs, const char * path);
-        String          readFile(fs::FS &fs, const char * path);
+        String          readFile(fs::FS &fs, const char * path, bool print);
         bool            writeFile(fs::FS &fs, const char * path, const char * message);
         void            appendFile(fs::FS &fs, const char * path, const char * message);
         bool            renameFile(fs::FS &fs, const char * path1, const char * path2);

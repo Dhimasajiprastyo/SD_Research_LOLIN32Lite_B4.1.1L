@@ -137,7 +137,7 @@ void SDOP::removeDir(fs::FS &fs, const char * path){
     }
 }
 
-String SDOP::readFile(fs::FS &fs, const char * path){
+String SDOP::readFile(fs::FS &fs, const char * path, bool print){
     Serial.printf("Reading file: %s --> ", path);
     String out;
     File file = fs.open(path);
@@ -154,7 +154,11 @@ String SDOP::readFile(fs::FS &fs, const char * path){
     /* while(file.available()){
         Serial.write(file.read());
     } */
-    Serial.println(out);
+    if(print){
+        Serial.println(out);
+    }else{
+        Serial.println("EXIST!");
+    }
     file.close();
     return out;
     }

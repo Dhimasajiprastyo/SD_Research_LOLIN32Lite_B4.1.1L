@@ -109,7 +109,6 @@
 #pragma endregion general_define
 
 #define SD_SS 14
-#define SIM_RING 27
 #ifdef _USE_A1_FOR_WATER_LEVEL_
 #define SW_AWLR_PWR 25
 #endif
@@ -167,7 +166,7 @@ enum cmd_code {
   code_battery, code_imei, code_signal, code_sd_clr_pend, code_sd_clr_sent,
   code_wait_me, code_set_limit_waitme, code_sd_count_pend, code_sd_count_sent,
   code_recount_sent, code_recount_pend, code_apply_def_settings, code_set_sd_limit_access,
-  code_cancle_recount_sent, code_cancle_recount_pend, code_write_rules, code_print_rules,
+  code_cancle_recount_sent, code_cancle_recount_pend, code_custom_config, code_print_custom_config,
   code_recheck_sd, code_close_cmd, code_not_found
 };
 #pragma endregion enum_generation
@@ -191,6 +190,7 @@ bool SIMon = false;
 uint8_t selected_apn = 0;
 bool filePending = false;
 bool BatterySafeMode = false;
+bool burstMode = false;
 bool got_message = false;
 bool wait_for_broker = false;
 bool wait_broker_initiated = true;
@@ -210,7 +210,6 @@ int8_t prev_cmd_code = -1;
 uint8_t similar_message = 0;
 unsigned long lcdRefresh;
 bool disableSD_temporary = false;
-bool rules_exist = false;
 #pragma endregion global_variables
 
 /**
@@ -313,9 +312,35 @@ byte electric[8] = {
 
 #pragma region new_structures
 struct Rules {
-  float p1,p2,p3,o1,o2,o3,wl,fl,v1,i1,c1,v2,i2,c2,v3,i3,c3;
+  float p1;
+  float p2;
+  float p3;
+  uint16_t wl;
+  float fl;
+  uint16_t v1;
+  float i1;
+  float c1;
+  uint16_t v2;
+  float i2;
+  float c2;
+  uint16_t v3;
+  float i3;
+  float c3;
   //-----------operator rule
-  uint8_t op1,op2,op3,oo1,oo2,oo3,owl,ofl,ov1,oi1,oc1,ov2,oi2,oc2,ov3,oi3,oc3;
+  uint8_t op1;
+  uint8_t op2;
+  uint8_t op3;
+  uint8_t owl;
+  uint8_t ofl;
+  uint8_t ov1;
+  uint8_t oi1;
+  uint8_t oc1;
+  uint8_t ov2;
+  uint8_t oi2;
+  uint8_t oc2;
+  uint8_t ov3;
+  uint8_t oi3;
+  uint8_t oc3;
 };
 Rules rules;
 
@@ -430,8 +455,8 @@ const char* brokerSelectorF(bool selector)
     return brokerStaging;
     } */
 
-#ifdef _USE_STAGING_
-  return brokerStaging; //Apapun bool selectornya, yang direturn tetap staging server
+#ifdef _USE_DEF_SERVER_
+  return brokerProduction; //Apapun bool selectornya, yang direturn tetap production server
 #else
   if (selector)
     return brokerProduction;
@@ -632,58 +657,26 @@ float getWaterHeight(uint8_t AnalogPin) {
 }
 #endif
 
-float getPressureValue(uint8_t analog_port, int16_t adc){
-  int16_t adc_pressure = filterAnalog(analog_port);
-  if(adc > 0){
-    adc_pressure = adc;
-  }
-  float bar_pressure = ((convertAnalogToVolt(adc_pressure) - 0.5) * 250) / 100;
-  return bar_pressure;
-}
-
-float pressure_plus_offset(float pressure, float offset){
-  float sum = pressure + offset;
-  if (pressure >= 0){
-    return sum;
-  }else{
-    return 0;
-  }
-}
-
 void printData() {
-  // int16_t buffer[4];
-  int16_t adc_volt;
+  int16_t buffer[4];
 
   while (1) {
     int buttonEvt = menu.buttonEvent();
     if (buttonEvt > -1) break;
 
-    adc_volt = filterAnalog(3);
-    // buffer[0] = filterAnalog(3);
-    // buffer[1] = filterAnalog(0);
-    // buffer[2] = filterAnalog(1);
-    // buffer[3] = filterAnalog(2);
-    // float battery = convertAnalogToVolt(buffer[0]) * 3.35;
-    float battery = convertAnalogToVolt(adc_volt) * 3.35;
+    buffer[0] = filterAnalog(3);
+    buffer[1] = filterAnalog(0);
+    buffer[2] = filterAnalog(1);
+    buffer[3] = filterAnalog(2);
+    float battery = convertAnalogToVolt(buffer[0]) * 3.35;
     float batPersentage = ((battery - 10) / 4) * 100;
-    // float pressure1 = ((convertAnalogToVolt(buffer[1]) - 0.5) * 250) / 100;
-    // float pressure2 = ((convertAnalogToVolt(buffer[2]) - 0.5) * 250) / 100;
-    // float pressure3 = ((convertAnalogToVolt(buffer[3]) - 0.5) * 250) / 100;
-    float pressure1 = getPressureValue(0,0);
-    float pressure2 = getPressureValue(1,0);
-    float pressure3 = getPressureValue(2,0);
-    if(rules_exist){
-      pressure1 = pressure_plus_offset(pressure1, rules.o1);
-      pressure2 = pressure_plus_offset(pressure2, rules.o2);
-      pressure3 = pressure_plus_offset(pressure3, rules.o3);
-    }else{
-      pressure1 = pressure_plus_offset(pressure1, _OFFSET_P1_);
-      pressure2 = pressure_plus_offset(pressure2, _OFFSET_P2_);
-      pressure3 = pressure_plus_offset(pressure3, _OFFSET_P3_);
-    }
-    // pressure1 = pressure1 >= 0 ? (pressure1 + _OFFSET_P1_) : 0; // edit + .. untuk offset
-    // pressure2 = pressure2 >= 0 ? (pressure2 + _OFFSET_P2_) : 0;
-    // pressure3 = pressure3 >= 0 ? (pressure3 + _OFFSET_P3_) : 0;
+    float pressure1 = ((convertAnalogToVolt(buffer[1]) - 0.5) * 250) / 100;
+    float pressure2 = ((convertAnalogToVolt(buffer[2]) - 0.5) * 250) / 100;
+    float pressure3 = ((convertAnalogToVolt(buffer[3]) - 0.5) * 250) / 100;
+
+    pressure1 = pressure1 >= 0 ? (pressure1 + _OFFSET_P1_) : 0; // edit + .. untuk offset
+    pressure2 = pressure2 >= 0 ? (pressure2 + _OFFSET_P2_) : 0;
+    pressure3 = pressure3 >= 0 ? (pressure3 + _OFFSET_P3_) : 0;
 
     char bufferLCD[2][16];
     sprintf(bufferLCD[0], "Bat:%.02f/%.01f", battery, batPersentage);
@@ -693,6 +686,7 @@ void printData() {
     lcd.print(bufferLCD[0]);
     lcd.setCursor(0, 1);
     lcd.print(bufferLCD[1]);
+
     delay(500);
   }
 }
@@ -782,7 +776,6 @@ bool cek_battery_safe() {
   }
 }
 
-/*
 bool cek_burst_mode(uint8_t on, uint8_t off) {
   bool mode = false;
   RtcDateTime dt = rtc.GetDateTime();
@@ -807,7 +800,6 @@ bool cek_burst_mode(uint8_t on, uint8_t off) {
   burstMode = mode;
   return mode;
 }
-*/
 
 bool SDok() {
   bool sdok = config.useSD && (~device_info.sd_failure);
@@ -908,7 +900,7 @@ bool readRules(fs::FS &fs, Rules &rules) {
   if (!file || file.isDirectory()) {
     return false;
   }
-  const size_t cap = 17 * JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(20) + 280; //hasil hitung dari https://arduinojson.org/v5/assistant/
+  const size_t cap = 14 * JSON_ARRAY_SIZE(2) + JSON_OBJECT_SIZE(16) + 210;
   // StaticJsonDocument<cap * 4> doc;
   StaticJsonDocument<cap> doc;
   DeserializationError error = deserializeJson(doc, file);
@@ -920,13 +912,6 @@ bool readRules(fs::FS &fs, Rules &rules) {
   rules.p2 = doc["p2"][1];
   rules.op3 = doc["p3"][0];
   rules.p3 = doc["p3"][1];
-
-  rules.oo1 = doc["o1"][0];
-  rules.o1 = doc["o1"][1];
-  rules.oo2 = doc["o2"][0];
-  rules.o2 = doc["o2"][1];
-  rules.oo3 = doc["o3"][0];
-  rules.o3 = doc["o3"][1];
 
   rules.owl = doc["wl"][0];
   rules.wl = doc["wl"][1];
@@ -976,8 +961,8 @@ bool write_new_rules_from_broker(String& fname, String& new_rules) {
     mqtt.publish(STATUS_TOPIC, "{\"ans\":\"FAILED!\"}");
   }
   delay(2000);
-  String updated_rules; updated_rules.reserve(380);
-  updated_rules = sdop.readFile(SPIFFS, c_file_name,0);
+  String updated_rules; updated_rules.reserve(280);
+  updated_rules = sdop.readFile(SPIFFS, c_file_name);
   c_new_rules = updated_rules.c_str();
   Serial.print("NEW_RULES:");
   Serial.println(c_new_rules);
@@ -1395,54 +1380,19 @@ void sensor_serial_set(bool flow) {
 }
 #endif
 
-//"note":"0X / 1= / 2< / 3> / 4<= / 5>= / 6!="
-template <typename T> bool cek_anomali(T rev_val, T val, uint8_t op){
-  if(op==1){ // ==
-    if(val == rev_val){
-      return true;
-    }
-  }else if(op==2){ // <
-    if(val < rev_val){
-      return true;
-    }
-  }else if(op==3){ // >
-    if(val > rev_val){
-      return true;
-    }
-  }else if(op==4){ // <=
-    if(val <= rev_val){
-      return true;
-    }
-  }else if(op==5){ //>=
-    if(val >= rev_val){
-      return true;
-    }
-  }else if(op==6){ //!=
-    if(val != rev_val){
-      return true;
-    }
-  }
-  return false;
-}
-
 // StaticJsonDocument<payloadSize> serializeData(Config configs) { //PENGAMBILAN DATA SENSOR-----------
 String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR-----------
-  bool anomali = false;
   bool rules_ok = readRules(SPIFFS, rules);
   if (rules_ok) {
     Serial.print("RULES_OK");
     lcd.clear(); lcd.print("RULES_OK");
-  }else{
-    Serial.print("NO_RULES");
-    lcd.clear(); lcd.print("NO_RULES");
   }
-  delay(3000);
- // lanjut dari sini lagi untuk pengecekan nilai yg didapat dari sensor apakah anomali atau tidak
+  sdlfkjsdf; // lanjut dari sini lagi untuk pengecekan nilai yg didapat dari sensor apakah anomali atau tidak
   Serial.println("Collecting data!");
   lcd.clear();
   lcd.print("Collecting data!");
 #ifdef _USE_ULTRASONIC_FLOW_METER_
-#ifdef _DYNAMIC_SERIAL_PORT_PIN_
+#ifdef DYNAMIC_SERIAL_PORT_PIN
   sensor_serial_set(1);
   delay(100);
 #endif
@@ -1455,43 +1405,9 @@ String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR---
   uint16_t batrei = filterAnalog(3); //kalau step up dinyalakan sebelum ambil ambil data analog ups, nilai ups selalu 0
   int P1 = filterAnalog(0);
 
-  if(rules_ok){
-    float bar_p1 = getPressureValue(0,P1);
-    if(rules.oo1 == 7){
-      bar_p1 += rules.o1;
-    }else if(rules.oo1 == 8){
-      bar_p1 -= rules.o1;
-    }
-    Serial.print("P1:");
-    Serial.println(bar_p1);
-    anomali = (rules_ok && (anomali || cek_anomali <uint16_t> (rules.p1,bar_p1,rules.op1))); //jangan lupa konversi tekanannya dulu, karena masih raw adc
-  }
-
 #ifdef _USE_ALL_PRESSURE_
   int P2 = filterAnalog(1);
   int P3 = filterAnalog(2);
-
-  if(rules_ok){
-    float bar_p2 = getPressureValue(0,P2);
-    if(rules.oo2 == 7){
-      bar_p2 += rules.o2;
-    }else if(rules.oo2 == 8){
-      bar_p2 -= rules.o2;
-    }
-    anomali = (rules_ok && (anomali || cek_anomali <uint16_t> (rules.p2,bar_p2,rules.op2))); //jangan lupa konversi tekanannya dulu, karena masih raw adc
-  
-    float bar_p3 = getPressureValue(0,P3);
-    if(rules.oo3 == 7){
-      bar_p3 += rules.o3;
-    }else if(rules.oo3 == 8){
-      bar_p3 -= rules.o3;
-    }
-    anomali = (rules_ok && (anomali || cek_anomali <uint16_t> (rules.p3,bar_p3,rules.op3))); //jangan lupa konversi tekanannya dulu, karena masih raw adc
-    Serial.print("P2:");
-    Serial.println(bar_p2);
-    Serial.print("P3:");
-    Serial.println(bar_p3);
-  }
 #endif
 
 #ifdef _USE_A1_FOR_WATER_LEVEL_
@@ -1500,7 +1416,6 @@ String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR---
   float h_awlr = getWaterHeight(1);
   delay(500);
   digitalWrite(SW_AWLR_PWR, 0);
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.wl,h_awlr,rules.owl)));
 #endif
 
 #ifdef _USE_ULTRASONIC_FLOW_METER_
@@ -1562,13 +1477,12 @@ String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR---
     // Serial.println("unit is ");
     Serial.println(kubikasi, 2);
   }
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.fl,flow_value,rules.ofl)));
   //   delay(200);
   // }
 #endif
 
 #ifdef _USE_PZEM_
-#ifdef _DYNAMIC_SERIAL_PORT_PIN_
+#ifdef DYNAMIC_SERIAL_PORT_PIN
   sensor_serial_set(0);
   delay(100);
 #endif
@@ -1620,24 +1534,7 @@ String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR---
   float wh3 = pzem3.energy();
   isnan(wh3) ? wh3 = 0 : wh3;
   //Data from PZEM--------------------------
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.v1,v1,rules.ov1)));
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.v2,v2,rules.ov2)));
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.v3,v3,rules.ov3)));
-
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.i1,i1,rules.oi1)));
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.i2,i2,rules.oi2)));
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.i3,i3,rules.oi3)));
-
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.c1,pf1,rules.oc1)));
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.c2,pf2,rules.oc2)));
-  anomali = (rules_ok && (anomali || cek_anomali <float> (rules.c3,pf3,rules.oc3)));
 #endif
-
-  if(anomali){
-    badSignal_directSend = true; //untuk pengiriman langsung ketika terjadi anomali
-    lcd.clear(); lcd.print("ANOMALI!!!");
-    delay(2000);
-  }
 
   uint16_t signal = 0;
   uint8_t sig;
@@ -1719,9 +1616,6 @@ String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR---
   log_result = cekdata;
   Serial.println(log_result);
   Serial.println("====");
-  if(anomali){  
-    Serial.println("ANOMALI!!!");
-  }
   return log_result;
 }
 
@@ -1790,7 +1684,7 @@ void update_sd_total_files(bool sent, uint16_t new_total) {
   const char* c_total = total.c_str();
   Serial.printf(" Will save %s:%s\n", c_filename, c_total);
   sdop.writeFile(SD, c_filename, c_total);
-  sdop.readFile(SD, c_filename,1);
+  sdop.readFile(SD, c_filename);
 }
 
 uint16_t read_sd_approx_sent_pend(bool sent) {
@@ -1810,7 +1704,7 @@ uint16_t read_sd_approx_sent_pend(bool sent) {
   if (SD.exists(c_filename)) {
     Serial.print("--READING "); Serial.println(c_filename);
     String number; number.reserve(30); //{\"total_recorded\":25800}
-    number = sdop.readFile(SD, c_filename,0);
+    number = sdop.readFile(SD, c_filename);
     const char* c_number = number.c_str();
     StaticJsonDocument<45> doc;
     DeserializationError error = deserializeJson(doc, c_number);
@@ -1965,11 +1859,11 @@ boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool
     String isi_file_pending = "";
     lcd.print("-");
     if (useSD) {
-      isi_file_pending = sdop.readFile(SD, nama_file_pending,1);
+      isi_file_pending = sdop.readFile(SD, nama_file_pending);
       Serial.println("from SD");
       lcd.write(byte(3)); //print icon SD card
     } else {
-      isi_file_pending = sdop.readFile(SPIFFS, DATA_FILENAME,1);
+      isi_file_pending = sdop.readFile(SPIFFS, DATA_FILENAME);
       Serial.println("from SPIFFS");
       lcd.print("ESP "); //print icon SD card
     }
@@ -2555,7 +2449,7 @@ void log_toSD(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
       pending_aprox++;
       update_sd_total_files(0, pending_aprox);
       lcd.print("Recorded2SD!");
-      String isi_fileSD = sdop.readFile(SD, fname,0); //Baca isi file di SD
+      String isi_fileSD = sdop.readFile(SD, fname); //Baca isi file di SD
       const char* isi_from_string = isi_fileSD.c_str(); //membuat const char* dari string!!!!!
       Serial.printf("Saved2pending: %s \n", isi_from_string);
     } else {
@@ -2575,7 +2469,7 @@ void log_toSD(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
     }
     sdop.writeFile(SPIFFS, DATA_FILENAME, data);
     lcd.print("Rec2SPIFFS!");
-    String isi_dataSPIFFS = sdop.readFile(SPIFFS, DATA_FILENAME,0); //Baca isi file di SD
+    String isi_dataSPIFFS = sdop.readFile(SPIFFS, DATA_FILENAME); //Baca isi file di SD
     const char* isi_from_string = isi_dataSPIFFS.c_str(); //membuat const char* dari string!!!!!
     Serial.printf("Saved2SPIFFS: %s \n", isi_from_string);
     delay(500);
@@ -2677,23 +2571,8 @@ void log_toSD(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
       //------------------------CUKUP UPAYA KIRIM SEKALI SAJA, Kalau gagal nanti coba lagi-----------------
     }
   }
-
   cnt_for_auto_restart++;
-  if(((cnt_for_auto_restart % 24)==0) && (config.log_cnt_auto_restart > 0)){ //mekanisme auto hard reset ketika tidak ada sinyal selama periode tertentu
-    if (!(wait_for_signal(30, config.minimum_signal))) {
-      lcd.clear(); lcd.print("Hard RST!");
-      pinMode(SIM_RING,OUTPUT);
-      digitalWrite(SIM_RING,0);
-      delay(10000);
-    }
-  }
   if ((cnt_for_auto_restart >= config.log_cnt_auto_restart) && (config.log_cnt_auto_restart > 0)) {
-    if (!(wait_for_signal(30, config.minimum_signal))) {
-      lcd.clear(); lcd.print("Hard RST!");
-      pinMode(SIM_RING,OUTPUT);
-      digitalWrite(SIM_RING,0);
-      delay(10000);
-    }
     stopWDT();
     lcd.clear(); lcd.print("Self Restart!");
     Serial.println("SELF_RESTART!");
@@ -2734,9 +2613,9 @@ String config_and_devinfo_status(bool cmd) {
   isi_status += getStringDateTime(config.timezone);
   isi_status += "\"},";
   if (cmd) {
-    isi_status += sdop.readFile(SPIFFS, CONFIG_FILENAME,0); //Baca isi file di SD
+    isi_status += sdop.readFile(SPIFFS, CONFIG_FILENAME); //Baca isi file di SD
     isi_status += ",";
-    isi_status += sdop.readFile(SPIFFS, DEVICE_INFO_FILENAME,0);
+    isi_status += sdop.readFile(SPIFFS, DEVICE_INFO_FILENAME);
   } else {
     isi_status += "{\"";
     isi_status += "tz:";
@@ -2795,7 +2674,7 @@ void write_custom_config_from_broker(String& fname, String& new_config) {
   }
   delay(2000);
   String new_custom_config; new_custom_config.reserve(75);
-  new_custom_config = sdop.readFile(SD, c_file_name,0);
+  new_custom_config = sdop.readFile(SD, c_file_name);
   c_new_config = new_custom_config.c_str();
   mqtt.publish(STATUS_TOPIC, c_new_config);
 }
@@ -2834,7 +2713,7 @@ void parsing_message(String& message) {
     sdop.writeFile(SPIFFS, CONFIG_FILENAME, new_config);
     readConfig(SPIFFS, config);
     Serial.println("New config:");
-    sdop.readFile(SPIFFS, CONFIG_FILENAME,0);
+    sdop.readFile(SPIFFS, CONFIG_FILENAME);
     mqtt.publish(STATUS_TOPIC, "{\"ans\":\"device_config_updated\"}");
     return;
   }
@@ -2849,7 +2728,7 @@ void parsing_message(String& message) {
     sdop.writeFile(SPIFFS, DEVICE_INFO_FILENAME, new_config);
     read_device_info(SPIFFS, device_info);
     Serial.println("New Device Info:");
-    sdop.readFile(SPIFFS, DEVICE_INFO_FILENAME,0);
+    sdop.readFile(SPIFFS, DEVICE_INFO_FILENAME);
     mqtt.publish(STATUS_TOPIC, "{\"ans\":\"device_info_updated\"}");
     return;
   }
@@ -3084,25 +2963,71 @@ void parsing_message(String& message) {
     }
     return;
   }
-  //-----------------------------writing new custom config------------- /rules.txt
-  find = "/rules.txt";
+  //-----------------------------writing new custom config-------------
+  find = "/config_rh_wh.txt";
   if (search_word(find, message) > -1) {
-    if (check_similar_cmd(code_write_rules, 3)) {
+    if (check_similar_cmd(code_custom_config, 3)) {
       return;
     }
-    write_new_rules_from_broker(find, message);
+    write_custom_config_from_broker(find, message);
     return;
   }
 
-  find = "print_rules";
+  find = "/config_rh_wl.txt";
   if (search_word(find, message) > -1) {
-    if (check_similar_cmd(code_print_rules, 2)) {
+    if (check_similar_cmd(code_custom_config, 3)) {
       return;
     }
-    String rules_txt; rules_txt.reserve(380);
-    rules_txt = sdop.readFile(SPIFFS, RULES_FILENAME,0);
-    const char* c_rules_txt = rules_txt.c_str();
-    mqtt.publish(STATUS_TOPIC, c_rules_txt);
+    write_custom_config_from_broker(find, message);
+    return;
+  }
+
+  find = "/config_rl_wh.txt";
+  if (search_word(find, message) > -1) {
+    if (check_similar_cmd(code_custom_config, 3)) {
+      return;
+    }
+    write_custom_config_from_broker(find, message);
+    return;
+  }
+
+  find = "/config_rl_wl.txt";
+  if (search_word(find, message) > -1) {
+    if (check_similar_cmd(code_custom_config, 3)) {
+      return;
+    }
+    write_custom_config_from_broker(find, message);
+    return;
+  }
+
+  find = "/config_normal.txt";
+  if (search_word(find, message) > -1) {
+    if (check_similar_cmd(code_custom_config, 3)) {
+      return;
+    }
+    write_custom_config_from_broker(find, message);
+    return;
+  }
+
+  find = "print_custom_config";
+  if (search_word(find, message) > -1) {
+    if (check_similar_cmd(code_print_custom_config, 2)) {
+      return;
+    }
+    String custom_config; custom_config.reserve(380);
+    custom_config = "{\"ans\":[";
+    custom_config += sdop.readFile(SD, "/config_normal.txt");
+    custom_config += ",";
+    custom_config += sdop.readFile(SD, "/config_rh_wh.txt");
+    custom_config += ",";
+    custom_config += sdop.readFile(SD, "/config_rh_wl.txt");
+    custom_config += ",";
+    custom_config += sdop.readFile(SD, "/config_rl_wh.txt");
+    custom_config += ",";
+    custom_config += sdop.readFile(SD, "/config_rl_wl.txt");
+    custom_config += "]}";
+    const char* c_custom_config = custom_config.c_str();
+    mqtt.publish(STATUS_TOPIC, c_custom_config);
     return;
   }
   //-----------------------------writing new custom config-------------
@@ -3131,6 +3056,7 @@ void parsing_message(String& message) {
 
     }
   }
+
 
   find = "close_cmd";
   if (search_word(find, message) > -1) {
@@ -3311,7 +3237,7 @@ void setDefSettings() {
   config.battery_safe = DEFAULT_BATTERY_SAFE;
   config.minimum_signal = 5;
   config.sync_time_interval = DEFAULT_SYNCTIME_INTERVAL; // sync di jam 12 malam saja sekali
-  config.log_cnt_auto_restart = 240;
+  config.log_cnt_auto_restart = 250;
 
   strlcpy(device_info.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION) + 1));
   strlcpy(device_info.my_dn, c_mydn, (strlen(c_mydn) + 1));
@@ -3353,7 +3279,7 @@ void write_normal_config() {
   normal_config += "}";
   const char* c_normal_config = normal_config.c_str();
   sdop.writeFile(SD, "/config_normal.txt", c_normal_config);
-  sdop.readFile(SD, "/config_normal.txt",1);
+  Serial.println(sdop.readFile(SD, "/config_normal.txt"));
 }
 
 void setup() {
@@ -3364,7 +3290,7 @@ void setup() {
   similar_message = 0;
   cmd_message = cmd_ready;
   pinMode(SD_SS, OUTPUT);
-  pinMode(SIM_RING, INPUT_PULLUP);
+  pinMode(27, INPUT_PULLUP);
   digitalWrite(SD_SS, 0);
 
 #ifdef _USE_A1_FOR_WATER_LEVEL_
@@ -3384,7 +3310,7 @@ void setup() {
 #ifdef _ACTIVATE_SENSOR_SERIAL1_
   // #define sensor_serial1 Serial1
   // sensor_serial1.begin(9600, SERIAL_8N1, 15, 2);
-#ifdef _DYNAMIC_SERIAL_PORT_PIN_
+#ifdef DYNAMIC_SERIAL_PORT_PIN
   sensor_serial_set(1);
 #endif
 #endif
@@ -3563,57 +3489,6 @@ void setup() {
   Serial.printf("SD Fail : %i\n", device_info.sd_failure);
   Serial.println("==END DEV INFO==");
   //----------------------END READ DEVICE INFO FROM SPIFFS---------------------
-
-  //----------------------READ RULES-------------------------------------------
-  if (SPIFFS.exists("/rules.txt")) {
-    rules_exist = true;
-    String text_rules; text_rules.reserve(380);
-    Serial.println("RULES_EXIST_SETUP");
-    lcd.clear(); lcd.print("RULES_EXIST");
-    text_rules = sdop.readFile(SPIFFS,RULES_FILENAME,1);
-    // Serial.println(text_rules);
-    delay(1000);
-  }else{
-    String text_rules; text_rules.reserve(380);
-    // text_rules = 
-    const char *c_rueles = "{\"rules\":\"/rules.txt\","
-    "\"n1\":\"o1(offsetP1),c1(PF1)\","
-    "\"n2\":\"index0:0X/1=/2</3>/4<=/5>=/6!=/7+/8-\","
-    "\"p1\":[0, 10.2],"
-    "\"p2\":[0, 14.3],"
-    "\"p3\":[0, 12.2],"
-    "\"o1\":[0, 0.1],"
-    "\"o2\":[0, 0.1],"
-    "\"o3\":[0, 0.1],"
-    "\"wl\":[0, 504.6],"
-    "\"fl\":[0, 14.6],"
-    "\"v1\":[0, 200.3],"
-    "\"i1\":[0, 60.5],"
-    "\"c1\":[0, 0.54],"
-    "\"v2\":[0, 567.3],"
-    "\"i2\":[0, 34.9],"
-    "\"c2\":[0, 0.65],"
-    "\"v3\":[0, 200.3],"
-    "\"i3\":[0, 50.5],"
-    "\"c3\":[0, 0.53]}";
-    lcd.clear(); lcd.print("NO_RULES");
-    delay(2000); 
-    // sdlkfjsdf; //lanjut dari sini 
-    if(sdop.writeFile(SPIFFS,RULES_FILENAME,c_rueles)){
-      rules_exist = true;
-      lcd.clear(); lcd.print("RULES_WRITEN!");
-      text_rules = sdop.readFile(SPIFFS,RULES_FILENAME,1);
-      // Serial.println(text_rules);
-      delay(1000); 
-    }else{
-      rules_exist = false;
-      lcd.clear(); lcd.print("RULES_FAILED!");
-      Serial.println("RULES_FAILED!");
-      delay(1000); 
-    }
-  }
-  //-------------------END READ RULES------------------------------------------
-
   Serial.printf("UseSD:%i\n", config.useSD);
   if (SDok()) {
     if (cekSD(config.SD_attempt)) {
@@ -3814,7 +3689,7 @@ void setup() {
 
 #ifdef _USE_ULTRASONIC_FLOW_METER_
           // while(!modbusok){
-#ifdef _DYNAMIC_SERIAL_PORT_PIN_
+#ifdef DYNAMIC_SERIAL_PORT_PIN
           sensor_serial_set(1);
           delay(100);
 #endif
@@ -3857,7 +3732,7 @@ void setup() {
           wait_button(1);
 #endif
 #ifdef _SET_PZEM_ADDR_
-#ifdef _DYNAMIC_SERIAL_PORT_PIN_
+#ifdef DYNAMIC_SERIAL_PORT_PIN
           sensor_serial_set(0);
           delay(100);
 #endif
@@ -3991,7 +3866,6 @@ void setup() {
           // delay(300);
         } else if (buffer == "#defset$") {
           selected = true; menu.levelMenu = 0;
-          sdop.deleteFile(SPIFFS,RULES_FILENAME);
           setDefSettings();
           // lcd.clear();
           // lcd.print("5/30 B11.3 Li180");
