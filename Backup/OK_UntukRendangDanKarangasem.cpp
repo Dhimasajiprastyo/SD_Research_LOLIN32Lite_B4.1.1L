@@ -175,9 +175,9 @@ enum cmd_code {
   code_host, code_software, code_tes_kirim, code_status, code_sync_time,
   code_battery, code_imei, code_signal, code_sd_clr_pend, code_sd_clr_sent,
   code_wait_me, code_set_limit_waitme, code_sd_count_pend, code_sd_count_sent,
-  code_recount_sent, code_recount_pend, code_def_settings, code_set_sd_limit_access,
+  code_recount_sent, code_recount_pend, code_apply_def_settings, code_set_sd_limit_access,
   code_cancle_recount_sent, code_cancle_recount_pend, code_write_rules, code_print_rules,
-  code_recheck_sd, code_set_time, code_cek_time_format, code_close_cmd, code_not_found
+  code_recheck_sd, code_close_cmd, code_not_found
 };
 #pragma endregion enum_generation
 
@@ -502,11 +502,6 @@ String getStringDateTime(byte timezone) {
              timezone
             );
   return datetime;
-}
-
-void manual_setCurrentTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second){
-  RtcDateTime compiled = RtcDateTime(year,month,day,hour,minute,second);
-  rtc.SetDateTime(compiled);
 }
 
 void setCurrentTime() {
@@ -2651,20 +2646,20 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
   }
 
   cnt_for_auto_restart++;
-  if (((cnt_for_auto_restart % 3) == 0) && (config.cnt_hard_reset > 0)) { //mekanisme auto hard reset ketika tidak ada sinyal selama periode tertentu
-    if (!(wait_for_signal(30, 40))) {
+  if (((cnt_for_auto_restart % 24) == 0) && (config.cnt_hard_reset > 0)) { //mekanisme auto hard reset ketika tidak ada sinyal selama periode tertentu
+    if (!(wait_for_signal(30, config.minimum_signal))) {
       do_hard_reset();
     }
   }
-  // if (((cnt_for_auto_restart % 24) == 0) && (config.cnt_hard_reset > 0)) { //mekanisme auto hard reset ketika tidak ada sinyal selama periode tertentu
-  //   if (!(wait_for_signal(30, config.minimum_signal))) {
-  //     do_hard_reset();
-  //   }
-  // }
   // if ((cnt_for_auto_restart >= config.log_cnt_auto_restart) && (config.log_cnt_auto_restart > 0)) {
   if(config.cnt_hard_reset > 0){
     if (cnt_for_auto_restart >= (1440 / config.cnt_hard_reset / config.ambilDataInterval)) { //hard reset 1x 24 jam tapi random
         do_hard_reset();
+      // stopWDT();
+      // lcd.clear(); lcd.print("Self Restart!");
+      // Serial.println("SELF_RESTART!");
+      // startWDT(5);
+      // while (1) {}
     }
   }
   delay(400);
@@ -2715,21 +2710,6 @@ String config_and_devinfo_status(bool cmd) {
   isi_status += "]}";
   //Serial.println(isi_status);
   return isi_status;
-}
-
-bool broker_setRTC(String& message){
-  bool result_value = false;
-  const char* source = message.c_str();
-  StaticJsonDocument<170> doc;
-  DeserializationError error = deserializeJson(doc, source);
-  if (!error) {
-    manual_setCurrentTime(doc["Y"],doc["M"],doc["D"],doc["h"],doc["m"],doc["s"]);
-    result_value = true;
-    Serial.println("BROKER_TIME_OK");
-  }else{
-    Serial.println("BROKER_TIME_FAILED");
-  }
-  return result_value;
 }
 
 uint16_t get_int_json_message(String& message, int16_t if_error) {
@@ -3035,9 +3015,10 @@ void parsing_message(String& message) {
     return;
   }
 
-  find = "def_settings";
+
+  find = "apply_def_settings";
   if (search_word(find, message) > -1) {
-    if (check_similar_cmd(code_def_settings, 2)) {
+    if (check_similar_cmd(code_apply_def_settings, 2)) {
       return;
     }
     cmd_message = cmd_def_settings;
@@ -3060,40 +3041,6 @@ void parsing_message(String& message) {
       msg += "\"}";
       const char* number = msg.c_str();
       mqtt.publish(STATUS_TOPIC, number);
-    }
-    return;
-  }
-
-  find = "time_format";
-  if (search_word(find, message) > -1) {
-    if (check_similar_cmd(code_cek_time_format, 3)) {
-      return;
-    }
-      mqtt.publish(STATUS_TOPIC, "{\"set_time\":8,\"Y\":2022,\"M\":12,\"D\":24,\"h\":23,\"m\":18,\"s\":58}");
-    return;
-  }
-
-  find = "set_time";
-  if (search_word(find, message) > -1) {
-    /* format json untuk seting waktu RTC manual
-    {
-      "set_time":8,
-      "Y":2022,
-      "M":12,
-      "D":24,
-      "h":23,
-      "m":18,
-      "s":58
-      }
-    */
-    if (check_similar_cmd(code_set_time, 4)) {
-      return;
-    }
-    bool result = broker_setRTC(message);
-    if (result) {
-      mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Set Time OK\"}");
-    } else {
-      mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Set Time FAILED\"}");
     }
     return;
   }
@@ -3133,7 +3080,7 @@ void parsing_message(String& message) {
     }
   }
 
-  find = "soft_reset";
+  find = "restart_device";
   if (search_word(find, message) > -1) {
     stopWDT();
     lcd.clear(); lcd.print("CMD_RESTART!");
@@ -3143,14 +3090,6 @@ void parsing_message(String& message) {
     while (1) {
 
     }
-  }
-
-  find = "hard_reset";
-  if (search_word(find, message) > -1) {
-    stopWDT();
-    Serial.println("CMD_HRD_RST!");
-    mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Will restart in 3s!\"}");
-    do_hard_reset();
   }
 
   find = "close_cmd";
@@ -3169,6 +3108,7 @@ void parsing_message(String& message) {
   }
   return;
 }
+
 
 void mqttCallback(char* topic, byte* payload, unsigned int len) {
   Serial.print("Message arrived [");
@@ -3518,25 +3458,18 @@ void setup() {
   if (config.timezone > 20 || config.timezone < -20) {
     config.timezone = 0;
   }
-  if(true){
-    String config_text; config_text.reserve(720);
-    config_text = config_and_devinfo_status(1);
-    Serial.println("===CONFIG===");
-    Serial.println(config_text);
-    Serial.println("==END CONFIG==");
-  }
-  // Serial.println("===CONFIG===");
-  // Serial.printf("Env: %s\n", config.brokerSelector ? "Production" : "Staging");
-  // Serial.printf("Host: %s \n", config.host);
-  // Serial.printf("Port: %d \n", config.port);
-  // Serial.printf("Timezone: %d \n", config.timezone);
-  // Serial.printf("Ambil Data Interval: %d \n", config.ambilDataInterval);
-  // Serial.printf("Kirim Data Interval: %d \n", config.kirimDataInterval);
-  // Serial.printf("Time for broker (s): %i\n", config.time_for_broker);
-  // Serial.printf("Watch dog timer (s): %i\n", config.watchdog_timer);
-  // Serial.printf("Max send: %i\n", config.max_send);
-  // Serial.printf("Max SD attempt: %i\n", config.SD_attempt);
-  // Serial.println("==END CONFIG==");
+  Serial.println("===CONFIG===");
+  Serial.printf("Env: %s\n", config.brokerSelector ? "Production" : "Staging");
+  Serial.printf("Host: %s \n", config.host);
+  Serial.printf("Port: %d \n", config.port);
+  Serial.printf("Timezone: %d \n", config.timezone);
+  Serial.printf("Ambil Data Interval: %d \n", config.ambilDataInterval);
+  Serial.printf("Kirim Data Interval: %d \n", config.kirimDataInterval);
+  Serial.printf("Time for broker (s): %i\n", config.time_for_broker);
+  Serial.printf("Watch dog timer (s): %i\n", config.watchdog_timer);
+  Serial.printf("Max send: %i\n", config.max_send);
+  Serial.printf("Max SD attempt: %i\n", config.SD_attempt);
+  Serial.println("==END CONFIG==");
   //----------------------------------------------END READ CONFIG---------------------
   Serial.println(getStringDateTime(config.timezone));
   //----------------------READ DEVICE INFO FROM SPIFFS---------------------
@@ -3579,13 +3512,23 @@ void setup() {
   read_device_info(SPIFFS, device_info);
   Serial.println(device_info.my_location);
 
-  Serial.println("=DEV INFO=");
+  // uint8_t compare = strcmp(device_info.software_version, SOFTWARE_VERSION);
+  // Serial.printf("Cmp software version: %i\n", compare);
+  // if (compare > 0) {
+  //   Serial.println(device_info.software_version);
+  //   Serial.println(SOFTWARE_VERSION);
+  //   strlcpy(device_info.software_version, SOFTWARE_VERSION, 10);
+  //   write_device_info(SPIFFS, device_info);
+  // }
+
+  Serial.println("===DEV INFO===");
   Serial.printf("Software: %s\n", device_info.software_version);
   Serial.printf("DN      : %s\n", device_info.my_dn);
   Serial.printf("Location: %s\n", device_info.my_location);
   Serial.printf("SD Fail : %i\n", device_info.sd_failure);
-  Serial.println("=END DEV INFO=");
+  Serial.println("==END DEV INFO==");
   //----------------------END READ DEVICE INFO FROM SPIFFS---------------------
+
   //----------------------READ RULES-------------------------------------------
   if (SPIFFS.exists("/rules.txt")) {
     rules_exist = readRules(SPIFFS,rules);
@@ -3594,7 +3537,7 @@ void setup() {
     lcd.clear(); lcd.print("RULES_EXIST");
     text_rules = sdop.readFile(SPIFFS, RULES_FILENAME, 1);
     // Serial.println(text_rules);
-    delay(800);
+    delay(1000);
   } else {
     String text_rules; text_rules.reserve(380);
     // text_rules =
@@ -3619,12 +3562,14 @@ void setup() {
                            "\"i3\":[0, 50.5],"
                            "\"c3\":[0, 0.53]}";
     lcd.clear(); lcd.print("NO_RULES");
-    delay(1000);
+    delay(2000);
+    // sdlkfjsdf; //lanjut dari sini
     if (sdop.writeFile(SPIFFS, RULES_FILENAME, c_rueles)) {
       rules_exist = true;
       sdop.writeFile(SPIFFS,DEF_RULES_FLAG,"0");
       lcd.clear(); lcd.print("RULES_WRITEN!");
       text_rules = sdop.readFile(SPIFFS, RULES_FILENAME, 1);
+      // Serial.println(text_rules);
       delay(1000);
     } else {
       rules_exist = false;
@@ -3696,7 +3641,7 @@ void setup() {
   }
   if (wakeUpFlag == 3) {
     internalRTCwakeup((60 * config.ambilDataInterval) + 15); //set alarm sendiri untuk jaga2
-    Serial.println("**INTERNAL RTC!**");
+    Serial.println("*--*INTERNAL RTC!!!!*--*");
     lcd.backlight();
     lcd.clear();
     lcd.print("Internal RTC!");
@@ -3766,13 +3711,11 @@ void setup() {
         } else if (buffer == "#status$") {
           selected = true; menu.levelMenu = 0;
           printStatus();
-        } else if (buffer == "#delrules$") {
+        } else if (buffer == "#apn$") {
           selected = true; menu.levelMenu = 0;
-          delay(300);
-          sdop.deleteFile(SPIFFS, RULES_FILENAME);
-          rules_exist = false;
-          lcd.clear(); lcd.print("Rules Deleted!");
-          delay(1000);
+          // delay(300);
+          // cek_apn();
+          // delay(300);
         } else if (buffer == "#disablesd$") {
           selected = true; menu.levelMenu = 1;
           delay(300);
@@ -3973,6 +3916,7 @@ void setup() {
           // delay(300);
         } else if (buffer == "#defset$") {
           selected = true; menu.levelMenu = 0;
+          // sdop.deleteFile(SPIFFS, RULES_FILENAME);
           setDefSettings();
           delay(500);
         } else if (buffer == "#exit$") {

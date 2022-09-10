@@ -175,9 +175,9 @@ enum cmd_code {
   code_host, code_software, code_tes_kirim, code_status, code_sync_time,
   code_battery, code_imei, code_signal, code_sd_clr_pend, code_sd_clr_sent,
   code_wait_me, code_set_limit_waitme, code_sd_count_pend, code_sd_count_sent,
-  code_recount_sent, code_recount_pend, code_def_settings, code_set_sd_limit_access,
+  code_recount_sent, code_recount_pend, code_apply_def_settings, code_set_sd_limit_access,
   code_cancle_recount_sent, code_cancle_recount_pend, code_write_rules, code_print_rules,
-  code_recheck_sd, code_set_time, code_cek_time_format, code_close_cmd, code_not_found
+  code_recheck_sd, code_close_cmd, code_not_found
 };
 #pragma endregion enum_generation
 
@@ -349,7 +349,7 @@ struct Config {
   // uint8_t burst_send_h_off;
   uint8_t cnt_send_from_spiffs;
   uint8_t sync_time_interval;
-  uint8_t cnt_hard_reset; // jumlah hard reset otomatis dalam 1 hari
+  uint8_t log_cnt_auto_restart;
 };
 Config config;
 
@@ -502,11 +502,6 @@ String getStringDateTime(byte timezone) {
              timezone
             );
   return datetime;
-}
-
-void manual_setCurrentTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second){
-  RtcDateTime compiled = RtcDateTime(year,month,day,hour,minute,second);
-  rtc.SetDateTime(compiled);
 }
 
 void setCurrentTime() {
@@ -1032,7 +1027,7 @@ bool readConfig(fs::FS &fs, Config &config) {
   // config.burst_send_h_off = doc["burst_send_h_off"];
   config.cnt_send_from_spiffs = doc["cnt_send_from_spiffs"];
   config.sync_time_interval = doc["sync_time_interval"];
-  config.cnt_hard_reset = doc["cnt_hard_reset"];
+  config.log_cnt_auto_restart = doc["log_cnt_auto_restart"];
 
 #ifdef _USE_DEF_SERVER_
   config.brokerSelector = true;
@@ -1063,7 +1058,6 @@ bool readConfig(fs::FS &fs, Config &config) {
   config.time_for_broker <= 0 ? config.time_for_broker = DEFAULT_TIME_FOR_BROKER : config.time_for_broker;
   config.time_for_broker > 300 ? config.time_for_broker = 300 : config.time_for_broker; //maksimal 270s
   config.sync_time_interval <= 3 ? config.sync_time_interval = 0 : config.sync_time_interval;
-  config.cnt_hard_reset > 8 ? config.cnt_hard_reset = 8 : config.cnt_hard_reset; //mencegah jumlah hard reset terlalu sering dalam 1 hari
   return true;
 }
 
@@ -1105,7 +1099,7 @@ bool writeConfig(fs::FS &fs, Config &config) {
   // doc["burst_send_h_off"] = config.burst_send_h_off;
   doc["cnt_send_from_spiffs"] = config.cnt_send_from_spiffs;
   doc["sync_time_interval"] = config.sync_time_interval;
-  doc["cnt_hard_reset"] = config.cnt_hard_reset;
+  doc["log_cnt_auto_restart"] = config.log_cnt_auto_restart;
 
 #ifdef _USE_DEF_SERVER_
   doc["brokerSelector"] = true;
@@ -1739,14 +1733,13 @@ String report_text(String& add_text) {
   float bat = getBatteryVoltage();
   char s_bat[6];
   sprintf(s_bat, "%.02fV", bat);
-  String buffer; buffer.reserve(127);
+  String buffer; buffer.reserve(102);
   buffer = "{\"ans\":\"";
-  buffer += getStringDateTime(config.timezone);
   if(SPIFFS.exists(DEF_RULES_FLAG)){
-    buffer += "_R!";
+    buffer += "R!_";
   }
   if (!SDok()) {
-    buffer += "_SD";
+    buffer += "SD";
     if (device_info.sd_failure) {
       buffer += "X";
     } else {
@@ -2275,8 +2268,7 @@ uint16_t clr_sent_pend(bool sent, uint8_t total_delete, uint8_t auto_delete) {
   return 1;
 }
 
-bool sync_time(bool set_alarm) {
-  bool result = false;
+void sync_time(bool set_alarm) {
   lcd.clear();
   lcd.backlight();
   lcd.home();
@@ -2295,7 +2287,6 @@ bool sync_time(bool set_alarm) {
     already_sync = true;
     lcd.clear();
     lcd.print("Time from server");
-    result = true;
   } else {
     lcd.clear();
     lcd.print("NO time received");
@@ -2310,7 +2301,6 @@ bool sync_time(bool set_alarm) {
     Serial.println(config.kirimDataInterval);
     setAlarmOne(config.kirimDataInterval);
   }
-  return result;
 }
 
 // void recountPend() {
@@ -2376,14 +2366,7 @@ void recountSent(uint8_t limited) {
   }
 }
 
-void do_hard_reset(){
-  lcd.clear(); lcd.print("Hard RST!");
-  pinMode(SIM_RING, OUTPUT);
-  digitalWrite(SIM_RING, 0);
-  delay(10000);
-}
-
-void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HANG SAAT AKSES SD
+void log_toSD(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SAJA BISA HANG SAAT AKSES SD
   //------------SET WDT--------------JAGA2 KALAU HANG-------------
   startWDT(config.watchdog_timer);
   //------------SET WDT--------------JAGA2 KALAU HANG-------------
@@ -2407,7 +2390,7 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
     already_sync = false;
   }
   Serial.printf("ModHour:%i, hasSync?%i\n", mod_hour, already_sync);
-  lcd.setCursor(0, 1); lcd.printf("Sync %i, Mod %i", already_sync, mod_hour);
+  lcd.setCursor(0, 1); lcd.printf("sync:%i,mod:%i", already_sync, mod_hour);
   delay(1000);
 
   // if ((year > 2100) || (month > 12) || (day > 31) || (hour > 23) || (minute > 59) || (config.timezone != DEFAULT_TIMEZONE)) { //sync time jika tanggal tidak wajar
@@ -2447,7 +2430,7 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
     disableSD_temporary = true;
     lcd.setCursor(0, 1); lcd.print("RecheckSD|");
     delay(1000);
-    if (cekSD(8)) { //tetap isi pengecekan sd ketika sd failur walaupun disable sd manual, untuk mengontrol sd failur saja. 
+    if (cekSD(8)) {
       if (device_info.sd_failure) {
         device_info.sd_failure = false;
         write_device_info(SPIFFS, device_info);
@@ -2474,7 +2457,7 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
   if (!disableSD_temporary) {
     lcd.setCursor(0, 1); lcd.print("CheckingSD|");
     delay(200);
-    if (!cekSD(3)) { // pengecekan saat SD enable dan digunakan, untuk memastikan sd baik2 saja saat menyimpan data nanti
+    if (!cekSD(3)) {
       disableSD_temporary = true;
     }
   }
@@ -2651,21 +2634,25 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
   }
 
   cnt_for_auto_restart++;
-  if (((cnt_for_auto_restart % 3) == 0) && (config.cnt_hard_reset > 0)) { //mekanisme auto hard reset ketika tidak ada sinyal selama periode tertentu
-    if (!(wait_for_signal(30, 40))) {
-      do_hard_reset();
+  if (((cnt_for_auto_restart % 24) == 0) && (config.log_cnt_auto_restart > 0)) { //mekanisme auto hard reset ketika tidak ada sinyal selama periode tertentu
+    if (!(wait_for_signal(30, config.minimum_signal))) {
+      lcd.clear(); lcd.print("Hard RST!");
+      pinMode(SIM_RING, OUTPUT);
+      digitalWrite(SIM_RING, 0);
+      delay(10000);
     }
   }
-  // if (((cnt_for_auto_restart % 24) == 0) && (config.cnt_hard_reset > 0)) { //mekanisme auto hard reset ketika tidak ada sinyal selama periode tertentu
-  //   if (!(wait_for_signal(30, config.minimum_signal))) {
-  //     do_hard_reset();
-  //   }
-  // }
   // if ((cnt_for_auto_restart >= config.log_cnt_auto_restart) && (config.log_cnt_auto_restart > 0)) {
-  if(config.cnt_hard_reset > 0){
-    if (cnt_for_auto_restart >= (1440 / config.cnt_hard_reset / config.ambilDataInterval)) { //hard reset 1x 24 jam tapi random
-        do_hard_reset();
-    }
+    if (cnt_for_auto_restart >= (1440 / config.ambilDataInterval)) { //hard reset 1x 24 jam tapi random
+      lcd.clear(); lcd.print("Hard RST!");
+      pinMode(SIM_RING, OUTPUT);
+      digitalWrite(SIM_RING, 0);
+      delay(10000);
+    // stopWDT();
+    // lcd.clear(); lcd.print("Self Restart!");
+    // Serial.println("SELF_RESTART!");
+    // startWDT(5);
+    // while (1) {}
   }
   delay(400);
 }
@@ -2679,7 +2666,7 @@ void testKirim() { //Fungsi tes kirim----------------
   badSignal_directSend = true;
   SIM800SleepDisable();
   mqtt.setBufferSize(1024);
-  log_data(true);
+  log_toSD(true);
   // mqttConnect(brokerSelectorF(config.brokerSelector), 1, 0, disableSD_temporary);
 }
 
@@ -2702,34 +2689,19 @@ String config_and_devinfo_status(bool cmd) {
     isi_status += (String)config.time_for_broker;
     isi_status += "|uSD:";
     isi_status += (String)config.useSD;
-    isi_status += "|SDL:";
+    isi_status += "|SDl:";
     isi_status += (String)config.SD_store_limit;
     isi_status += "|spf:";
     isi_status += (String)config.cnt_send_from_spiffs;
     isi_status += "|syc:";
     isi_status += (String)config.sync_time_interval;
     isi_status += "|rst:";
-    isi_status += (String)config.cnt_hard_reset;
+    isi_status += (String)config.log_cnt_auto_restart;
     isi_status += "\"}";
   }
   isi_status += "]}";
   //Serial.println(isi_status);
   return isi_status;
-}
-
-bool broker_setRTC(String& message){
-  bool result_value = false;
-  const char* source = message.c_str();
-  StaticJsonDocument<170> doc;
-  DeserializationError error = deserializeJson(doc, source);
-  if (!error) {
-    manual_setCurrentTime(doc["Y"],doc["M"],doc["D"],doc["h"],doc["m"],doc["s"]);
-    result_value = true;
-    Serial.println("BROKER_TIME_OK");
-  }else{
-    Serial.println("BROKER_TIME_FAILED");
-  }
-  return result_value;
 }
 
 uint16_t get_int_json_message(String& message, int16_t if_error) {
@@ -2795,14 +2767,6 @@ void parsing_message(String& message) {
   }
 
   String find; find.reserve(20);
-
-  find = "ans";
-  if (search_word(find, message) > -1) {
-    prev_cmd_code = code_not_found;
-    mqtt.publish(STATUS_TOPIC, "{\"ans\":\"CMD NOT FOUND!\"}");
-    return;
-  }
-
   find = "host";
   Serial.println(message);
   if (search_word(find, message) > -1) {
@@ -3035,9 +2999,10 @@ void parsing_message(String& message) {
     return;
   }
 
-  find = "def_settings";
+
+  find = "apply_def_settings";
   if (search_word(find, message) > -1) {
-    if (check_similar_cmd(code_def_settings, 2)) {
+    if (check_similar_cmd(code_apply_def_settings, 2)) {
       return;
     }
     cmd_message = cmd_def_settings;
@@ -3060,40 +3025,6 @@ void parsing_message(String& message) {
       msg += "\"}";
       const char* number = msg.c_str();
       mqtt.publish(STATUS_TOPIC, number);
-    }
-    return;
-  }
-
-  find = "time_format";
-  if (search_word(find, message) > -1) {
-    if (check_similar_cmd(code_cek_time_format, 3)) {
-      return;
-    }
-      mqtt.publish(STATUS_TOPIC, "{\"set_time\":8,\"Y\":2022,\"M\":12,\"D\":24,\"h\":23,\"m\":18,\"s\":58}");
-    return;
-  }
-
-  find = "set_time";
-  if (search_word(find, message) > -1) {
-    /* format json untuk seting waktu RTC manual
-    {
-      "set_time":8,
-      "Y":2022,
-      "M":12,
-      "D":24,
-      "h":23,
-      "m":18,
-      "s":58
-      }
-    */
-    if (check_similar_cmd(code_set_time, 4)) {
-      return;
-    }
-    bool result = broker_setRTC(message);
-    if (result) {
-      mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Set Time OK\"}");
-    } else {
-      mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Set Time FAILED\"}");
     }
     return;
   }
@@ -3133,7 +3064,7 @@ void parsing_message(String& message) {
     }
   }
 
-  find = "soft_reset";
+  find = "restart_device";
   if (search_word(find, message) > -1) {
     stopWDT();
     lcd.clear(); lcd.print("CMD_RESTART!");
@@ -3143,14 +3074,6 @@ void parsing_message(String& message) {
     while (1) {
 
     }
-  }
-
-  find = "hard_reset";
-  if (search_word(find, message) > -1) {
-    stopWDT();
-    Serial.println("CMD_HRD_RST!");
-    mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Will restart in 3s!\"}");
-    do_hard_reset();
   }
 
   find = "close_cmd";
@@ -3169,6 +3092,7 @@ void parsing_message(String& message) {
   }
   return;
 }
+
 
 void mqttCallback(char* topic, byte* payload, unsigned int len) {
   Serial.print("Message arrived [");
@@ -3331,7 +3255,7 @@ void setDefSettings() {
   config.battery_safe = DEFAULT_BATTERY_SAFE;
   config.minimum_signal = 5;
   config.sync_time_interval = DEFAULT_SYNCTIME_INTERVAL; // sync di jam 12 malam saja sekali
-  config.cnt_hard_reset = 1;
+  config.log_cnt_auto_restart = 240;
 
   strlcpy(device_info.software_version, SOFTWARE_VERSION, (strlen(SOFTWARE_VERSION) + 1));
   strlcpy(device_info.my_dn, c_mydn, (strlen(c_mydn) + 1));
@@ -3491,7 +3415,7 @@ void setup() {
     setupConfig.max_send = 8;
     setupConfig.useSD = true;
     setupConfig.SD_attempt = 15;
-    setupConfig.cnt_hard_reset = 1;
+    setupConfig.log_cnt_auto_restart = 260;
     setupConfig.sync_time_interval = 8;
 
     bool bSetupConfig = writeConfig(SPIFFS, setupConfig);
@@ -3518,25 +3442,18 @@ void setup() {
   if (config.timezone > 20 || config.timezone < -20) {
     config.timezone = 0;
   }
-  if(true){
-    String config_text; config_text.reserve(720);
-    config_text = config_and_devinfo_status(1);
-    Serial.println("===CONFIG===");
-    Serial.println(config_text);
-    Serial.println("==END CONFIG==");
-  }
-  // Serial.println("===CONFIG===");
-  // Serial.printf("Env: %s\n", config.brokerSelector ? "Production" : "Staging");
-  // Serial.printf("Host: %s \n", config.host);
-  // Serial.printf("Port: %d \n", config.port);
-  // Serial.printf("Timezone: %d \n", config.timezone);
-  // Serial.printf("Ambil Data Interval: %d \n", config.ambilDataInterval);
-  // Serial.printf("Kirim Data Interval: %d \n", config.kirimDataInterval);
-  // Serial.printf("Time for broker (s): %i\n", config.time_for_broker);
-  // Serial.printf("Watch dog timer (s): %i\n", config.watchdog_timer);
-  // Serial.printf("Max send: %i\n", config.max_send);
-  // Serial.printf("Max SD attempt: %i\n", config.SD_attempt);
-  // Serial.println("==END CONFIG==");
+  Serial.println("===CONFIG===");
+  Serial.printf("Env: %s\n", config.brokerSelector ? "Production" : "Staging");
+  Serial.printf("Host: %s \n", config.host);
+  Serial.printf("Port: %d \n", config.port);
+  Serial.printf("Timezone: %d \n", config.timezone);
+  Serial.printf("Ambil Data Interval: %d \n", config.ambilDataInterval);
+  Serial.printf("Kirim Data Interval: %d \n", config.kirimDataInterval);
+  Serial.printf("Time for broker (s): %i\n", config.time_for_broker);
+  Serial.printf("Watch dog timer (s): %i\n", config.watchdog_timer);
+  Serial.printf("Max send: %i\n", config.max_send);
+  Serial.printf("Max SD attempt: %i\n", config.SD_attempt);
+  Serial.println("==END CONFIG==");
   //----------------------------------------------END READ CONFIG---------------------
   Serial.println(getStringDateTime(config.timezone));
   //----------------------READ DEVICE INFO FROM SPIFFS---------------------
@@ -3579,13 +3496,23 @@ void setup() {
   read_device_info(SPIFFS, device_info);
   Serial.println(device_info.my_location);
 
-  Serial.println("=DEV INFO=");
+  // uint8_t compare = strcmp(device_info.software_version, SOFTWARE_VERSION);
+  // Serial.printf("Cmp software version: %i\n", compare);
+  // if (compare > 0) {
+  //   Serial.println(device_info.software_version);
+  //   Serial.println(SOFTWARE_VERSION);
+  //   strlcpy(device_info.software_version, SOFTWARE_VERSION, 10);
+  //   write_device_info(SPIFFS, device_info);
+  // }
+
+  Serial.println("===DEV INFO===");
   Serial.printf("Software: %s\n", device_info.software_version);
   Serial.printf("DN      : %s\n", device_info.my_dn);
   Serial.printf("Location: %s\n", device_info.my_location);
   Serial.printf("SD Fail : %i\n", device_info.sd_failure);
-  Serial.println("=END DEV INFO=");
+  Serial.println("==END DEV INFO==");
   //----------------------END READ DEVICE INFO FROM SPIFFS---------------------
+
   //----------------------READ RULES-------------------------------------------
   if (SPIFFS.exists("/rules.txt")) {
     rules_exist = readRules(SPIFFS,rules);
@@ -3594,7 +3521,7 @@ void setup() {
     lcd.clear(); lcd.print("RULES_EXIST");
     text_rules = sdop.readFile(SPIFFS, RULES_FILENAME, 1);
     // Serial.println(text_rules);
-    delay(800);
+    delay(1000);
   } else {
     String text_rules; text_rules.reserve(380);
     // text_rules =
@@ -3619,12 +3546,14 @@ void setup() {
                            "\"i3\":[0, 50.5],"
                            "\"c3\":[0, 0.53]}";
     lcd.clear(); lcd.print("NO_RULES");
-    delay(1000);
+    delay(2000);
+    // sdlkfjsdf; //lanjut dari sini
     if (sdop.writeFile(SPIFFS, RULES_FILENAME, c_rueles)) {
       rules_exist = true;
       sdop.writeFile(SPIFFS,DEF_RULES_FLAG,"0");
       lcd.clear(); lcd.print("RULES_WRITEN!");
       text_rules = sdop.readFile(SPIFFS, RULES_FILENAME, 1);
+      // Serial.println(text_rules);
       delay(1000);
     } else {
       rules_exist = false;
@@ -3696,7 +3625,7 @@ void setup() {
   }
   if (wakeUpFlag == 3) {
     internalRTCwakeup((60 * config.ambilDataInterval) + 15); //set alarm sendiri untuk jaga2
-    Serial.println("**INTERNAL RTC!**");
+    Serial.println("*--*INTERNAL RTC!!!!*--*");
     lcd.backlight();
     lcd.clear();
     lcd.print("Internal RTC!");
@@ -3766,13 +3695,11 @@ void setup() {
         } else if (buffer == "#status$") {
           selected = true; menu.levelMenu = 0;
           printStatus();
-        } else if (buffer == "#delrules$") {
+        } else if (buffer == "#apn$") {
           selected = true; menu.levelMenu = 0;
-          delay(300);
-          sdop.deleteFile(SPIFFS, RULES_FILENAME);
-          rules_exist = false;
-          lcd.clear(); lcd.print("Rules Deleted!");
-          delay(1000);
+          // delay(300);
+          // cek_apn();
+          // delay(300);
         } else if (buffer == "#disablesd$") {
           selected = true; menu.levelMenu = 1;
           delay(300);
@@ -3973,6 +3900,7 @@ void setup() {
           // delay(300);
         } else if (buffer == "#defset$") {
           selected = true; menu.levelMenu = 0;
+          sdop.deleteFile(SPIFFS, RULES_FILENAME);
           setDefSettings();
           delay(500);
         } else if (buffer == "#exit$") {
@@ -4181,6 +4109,7 @@ void setup() {
       testKirim();
     }
 #endif
+
     delay(100);
     lcd.clear();
   }
@@ -4200,9 +4129,21 @@ void setup() {
     delay(200);
     Serial.println("In alarm one");
     internalRTCwakeup((60 * config.ambilDataInterval) + 15);
+
+    // if ((!config.useSD) && (device_info.sd_failure)) { //kalo useSD=false, dan SDfailure=true cek sd card lagi, siapa tau udah mau
+    //   if (cekSD(config.SD_attempt / 2)) {
+    //     config.useSD = true;
+    //     writeConfig(SPIFFS, config);
+    //     lcd.clear(); lcd.print("SD Reconnected!");
+    //   } else {
+    //     lcd.clear(); lcd.print("SD Failed!");
+    //   }
+    //   delay(500);
+    // }
+
     logCount = 0; //penanda kalau alarm 1 sudah pernah dipanggil
     cek_battery_safe();
-
+    // uint8_t pending = sdop.countFile(SD, "/pend", 1);
     if (SDok()) {
       recountPend(100);
     } else {
@@ -4214,6 +4155,7 @@ void setup() {
 
         badSignal_directSend = false;
         Serial.println(APN);
+        // Serial.println(apn_name[config.selected_apn]);
 
         byte notconnected = setupModem(brokerSelectorF(config.brokerSelector)); //1 = failed, 0=ok
         if (notconnected) {
@@ -4244,7 +4186,7 @@ void setup() {
     lcd.backlight();
     delay(500);
     Serial.println("-----Alarm two (_f/Setup)-----");
-    log_data(false);
+    log_toSD(false);
     alreadyLog = true; //penanda kalau alarm 2 sudah pernah dipanggil
     logCount++;
     internalRTCwakeup((60 * config.ambilDataInterval) + 15);
@@ -4328,11 +4270,7 @@ void loop() {
           mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Sync time...\"}");
           mqtt.setKeepAlive(15);
           delay(1000);
-          if(sync_time(0)){
-            mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Sync OK\"}");
-          }else{
-            mqtt.publish(STATUS_TOPIC, "{\"ans\":\"SyncFAILED\"}");
-          }
+          sync_time(0);
           lcd.clear(); lcd.print("Sync Time done!");
           delay(500);
         } else if (cmd_message == cmd_clear_pend) {

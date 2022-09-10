@@ -70,7 +70,7 @@ String Menu::router() {
   } else if (levelMenu == 1 && selector[0] == 4) {
     return "#test$";
   } else if (levelMenu == 1 && selector[0] == 5) {
-    return "#apn$";
+    return "#delrules$";
   } else if (levelMenu == 1 && selector[0] == 6) {
     return sdMenu[selector[1]];
   } else if (levelMenu == 1 && selector[0] == 7) {
