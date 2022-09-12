@@ -62,7 +62,7 @@ String Menu::router() {
   } else if (levelMenu == 1 && selector[0] == 0) {
     return settingMenu[selector[1]];
   } else if (levelMenu == 1 && selector[0] == 1) {
-    return "#analog$";
+    return "#sleep$";
   } else if (levelMenu == 1 && selector[0] == 2) {
     return "#status$";
   } else if (levelMenu == 1 && selector[0] == 3) {
@@ -80,7 +80,7 @@ String Menu::router() {
   } else if (levelMenu == 1 && selector[0] == 9) {
     return "#sig$";
   } else if (levelMenu == 1 && selector[0] == 10) {
-    return "#burst$";
+    return "#date$";
   } else if (levelMenu == 1 && selector[0] == 11) {
     return "#defset$";
   } else if (levelMenu == 1 && selector[0] == 12) {

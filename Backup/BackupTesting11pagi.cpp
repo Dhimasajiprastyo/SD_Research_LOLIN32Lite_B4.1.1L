@@ -95,7 +95,7 @@
 #define PRINT_ANALOG_TIMEOUT 60000
 #define CONFIG_FILENAME "/config.txt"
 #define RULES_FILENAME "/rules.txt"
-#define USING_DEF_RULES "/def_rules.txt" //jika file ini ada, artinya rule ada tapi tidak aktif semua / menggunakan default rules
+#define DEF_RULES_FLAG "/def_rules.txt"
 #define DATA_FILENAME "/data.txt"
 #define DEVICE_INFO_FILENAME "/device_info.txt"
 #define APN "internet"
@@ -385,15 +385,9 @@ void stopWDT() {
   esp_task_wdt_deinit(); //deinit wdt----------
 }
 
-
 void startWDT(uint16_t limitTime) {
   esp_task_wdt_init(limitTime, true); //enable panic so ESP32 restarts limit 5 menit jika terjadi kegagalan koneksi SD
   esp_task_wdt_add(NULL); //add current thread to WDT watch
-}
-
-void lcd_clear_print(char text[16], uint16_t t_delay){
-  lcd.clear(); lcd.print(text);
-  delay(t_delay);
 }
 
 void internalRTCwakeup(uint16_t t_wakeup) {
@@ -528,9 +522,8 @@ void setCurrentTime(uint32_t unixtime) {
 uint32_t syncTimeUnixTime() {
   if ((config.timezone < 7) || (config.timezone > 9)) {
     Serial.println("BUKAN TIMEZONE INDONESIA");
-    // lcd.clear(); lcd.print("TimezoneInvalid");
-    lcd_clear_print("TimezoneInvalid",1000);
-    // delay(1000);
+    lcd.clear(); lcd.print("TimezoneInvalid");
+    delay(2000);
     config.timezone = DEFAULT_TIMEZONE;
   }
   String area; area.reserve(29);
@@ -606,6 +599,7 @@ void lcdPrint(const char y1[16], const char y2[16]) {
     if (millis() - lcdRefresh > 150) {
       lcdRefresh = millis();
       lcd.clear();
+      lcd.home();
       lcd.print(y1);
       lcd.setCursor(0, 1);
       lcd.print(y2);
@@ -673,6 +667,7 @@ float pressure_plus_offset(float pressure, float offset) {
 void printData() {
   // int16_t buffer[4];
   int16_t adc_volt;
+
   while (1) {
     int buttonEvt = menu.buttonEvent();
     if (buttonEvt > -1) break;
@@ -684,31 +679,17 @@ void printData() {
     // buffer[3] = filterAnalog(2);
     // float battery = convertAnalogToVolt(buffer[0]) * 3.35;
     float battery = convertAnalogToVolt(adc_volt) * 3.35;
-    float batPersentage = ((battery - 10) / 4.4) * 100;
+    float batPersentage = ((battery - 10) / 4) * 100;
     // float pressure1 = ((convertAnalogToVolt(buffer[1]) - 0.5) * 250) / 100;
     // float pressure2 = ((convertAnalogToVolt(buffer[2]) - 0.5) * 250) / 100;
     // float pressure3 = ((convertAnalogToVolt(buffer[3]) - 0.5) * 250) / 100;
     float pressure1 = getPressureValue(0, 0);
     float pressure2 = getPressureValue(1, 0);
     float pressure3 = getPressureValue(2, 0);
-    Serial.print("InData");
-    Serial.println(rules_exist);
     if (rules_exist) {
-      if (rules.oo1 == 7) {
-        pressure1 = pressure_plus_offset(pressure1, rules.o1);
-      } else if (rules.oo1 == 8) {
-        pressure1 = pressure_plus_offset(pressure1, -rules.o1);
-      }
-      if (rules.oo2 == 7) {
-        pressure2 = pressure_plus_offset(pressure2, rules.o2);
-      } else if (rules.oo2 == 8) {
-        pressure2 = pressure_plus_offset(pressure2, -rules.o2);
-      }
-      if (rules.oo3 == 7) {
-        pressure3 = pressure_plus_offset(pressure3, rules.o3);
-      } else if (rules.oo3 == 8) {
-        pressure3 = pressure_plus_offset(pressure3, -rules.o3);
-      }
+      pressure1 = pressure_plus_offset(pressure1, rules.o1);
+      pressure2 = pressure_plus_offset(pressure2, rules.o2);
+      pressure3 = pressure_plus_offset(pressure3, rules.o3);
     } else {
       pressure1 = pressure_plus_offset(pressure1, _OFFSET_P1_);
       pressure2 = pressure_plus_offset(pressure2, _OFFSET_P2_);
@@ -722,6 +703,7 @@ void printData() {
     sprintf(bufferLCD[0], "Bat:%.02f/%.01f", battery, batPersentage);
     sprintf(bufferLCD[1], "P:%.01f %.01f %.01f", pressure1, pressure2, pressure3); //nanti dicoment aja
     lcd.clear();
+    lcd.home();
     lcd.print(bufferLCD[0]);
     lcd.setCursor(0, 1);
     lcd.print(bufferLCD[1]);
@@ -776,6 +758,7 @@ void interactiveInputInterval(const char* title, int &initialValue, byte cnt, St
   const char* c_unit = unit.c_str();
 
   lcd.clear();
+  lcd.home();
   lcd.print(title);
   lcd.setCursor(0, 1);
   lcd.print("<" + String(initialValue) + ">");
@@ -868,22 +851,6 @@ void print_mode() {
 #endif
 }
 
-void empty_sd(uint8_t max_delete){
-  bool all_empty = false;
-  lcd_clear_print("clearing SD..",10);
-  if(SDok()){
-    if(sdop.countFile(SD, "/pend", 1)>0){
-      sdop.deleteManyFile(SD,"/pend",50);
-    }else{
-      all_empty = true;
-    }
-    if(sdop.countFile(SD, "/sent", 1)>0){
-      sdop.deleteManyFile(SD,"/sent",50);
-    }cvxv;
-  }
-}
-
-
 void lcdPrintCurrentDate() {
   RtcDateTime now = rtc.GetDateTime();
   uint8_t csq = modem.getSignalQuality();
@@ -914,6 +881,7 @@ void printStatus() {
   sprintf(lcdBuffer[1], "RTC:%s", RTC_Health == 0 ? "OK" : "Er");
   //sprintf(lcdBuffer[1], "RTC:%s LCD:%s", RTC_Health == 0 ? "OK" : "Er", LCD_Health == 0 ? "OK" : "Er");
   lcd.clear();
+  lcd.home();
   lcd.print(lcdBuffer[0]);
   lcd.setCursor(0, 1);
   lcd.print(lcdBuffer[1]);
@@ -1016,7 +984,7 @@ bool write_new_rules_from_broker(String& fname, String& new_rules) {
 
   bool write_ok = sdop.writeFile(SPIFFS, c_file_name, c_new_rules);
   if (write_ok) {
-    if(SPIFFS.exists(USING_DEF_RULES)){sdop.deleteFile(SPIFFS,USING_DEF_RULES);} 
+    if(SPIFFS.exists(DEF_RULES_FLAG)){sdop.deleteFile(SPIFFS,DEF_RULES_FLAG);}
     Serial.printf("%s updtd!\n", c_file_name);
     mqtt.publish(STATUS_TOPIC, "{\"ans\":\"RULES_UPDATED!\"}");
   } else {
@@ -1218,121 +1186,58 @@ bool SIM800SleepDisable() {
   return true;
 }
 
-  void set_lcd_date_time() {
+/*
+  void set_burst_hour() {
   uint8_t i = 0;
   uint8_t btn = 3;
-  int8_t date_time[7];
-  date_time[0] = 2022;
-  date_time[1] = 6;
-  date_time[2] = 15;
-  date_time[3] = 13;
-  date_time[4] = 30;
-  date_time[5] = 0;
-  date_time[6] = 8;
-
+  int8_t on_off[2];
+  on_off[0] = config.cnt_send_from_spiffs;
+  // on_off[1] = config.burst_send_h_off;
 
   lcd.clear();
   lcd.backlight();
 
-  while (i < 7) {
+  while (i < 1) {
     lcd.clear();
-    switch (i)
-    {
-    case 0:
-      lcd.print("Tahun:202");
-      break;
-    
-    case 1:
-      lcd.print("Bulan:");
-      break;
-
-    case 2:
-      lcd.print("Tanggal:");
-      break;
-
-    case 3:
-      lcd.print("Jam(0-23):");
-      break; 
-
-    case 4:
-      lcd.print("Menit:");
-      break; 
-
-    case 5:
-      lcd.print("Detik:");
-      break; 
-
-    case 6:
-      lcd.print("TimeZone:GMT+");
-      break; 
-
-    default:
-      break;
-    }
-    lcd.print(date_time[i]);
+    lcd.print("On=Off:Disabled");
+    lcd.setCursor((i * 8), 1); lcd.print(">"); //sdfsdf
+    lcd.setCursor(1, 1); lcd.print("On:");
+    // lcd.setCursor(9, 1); lcd.print("Off:");
+    lcd.setCursor(3, 1); lcd.print(on_off[0]);
+    // lcd.setCursor(12, 1); lcd.print(on_off[1]);
 
     btn = menu.buttonEvent();
-    btn == 0 ? date_time[i]-- : date_time[i];
-    btn == 1 ? date_time[i]++ : date_time[i];
-    
-    if(date_time[0]<0){
-      date_time[0] = 0;
-    }
-    if(date_time[1]<=0){
-      date_time[1] = 12;
-    }else if(date_time[1]>12){
-      date_time[1] = 1;
-    }
-    if(date_time[2]<=0){
-      date_time[2] = 31;
-    }else if(date_time[2]>31){
-      date_time[2] = 1;
-    }
-    if(date_time[3]<0){
-      date_time[3] = 23;
-    }else if(date_time[3]>23){
-      date_time[3] = 0;
-    }
-    if(date_time[4]<0){
-      date_time[4] = 59;
-    }else if(date_time[4]>59){
-      date_time[4] = 0;
-    }
-    if(date_time[5]<0){
-      date_time[5] = 59;
-    }else if(date_time[5]>59){
-      date_time[5] = 0;
-    }
-    if(date_time[6]<0){
-      date_time[6] = 12;
-    }else if(date_time[6]>12){
-      date_time[6] = 0;
-    }
+    i == 0 ? lcd.setCursor(0, 3) : lcd.setCursor(0, 12);
+    btn == 0 ? on_off[i]-- : on_off[i];
+    btn == 1 ? on_off[i]++ : on_off[i];
+    on_off[i] > 60 ? on_off[i] = 0 : on_off[i];
+    on_off[i] < 0 ? on_off[i] = 60 : on_off[i];
     btn == 2 ? i++ : i ;
     delay(50);
   }
 
-  lcd_clear_print("Setting Time..",1000);
-  uint16_t year = 2020 + date_time[0];
-  manual_setCurrentTime(year,date_time[1],date_time[2],date_time[3],date_time[4],date_time[5]);
-  config.timezone = date_time[6];
-  writeConfig(SPIFFS,config);
-  String new_date_time; new_date_time.reserve(27);
-  char date_txt[10], time_txt[12];
-  sprintf(date_txt,"%i/%i/%i",year,date_time[1],date_time[2]);
-  sprintf(time_txt,"%i:%i:%i+%i",date_time[3],date_time[4],date_time[5],date_time[6]);
-  lcd.clear(); 
-  lcd.print(date_txt);
-  lcd.setCursor(0,1); lcd.print(time_txt);
-  delay(1500);
+  config.cnt_send_from_spiffs = on_off[0];
+  // config.burst_send_h_off = on_off[1];
+
+  if (writeConfig(SPIFFS, config)) {
+    lcd.clear();
+    lcd.print("NewConfig Saved!");
+  }
+  else {
+    lcd.clear();
+    lcd.print("Failed to Save!");
+  }
+  delay(1000);
   lcd.clear();
   }
-
+*/
 
 bool wait_for_signal(uint16_t second, uint8_t minimumSignal) {
   if (!SIMon) { //jika sim lupa dienable--------
     SIM800SleepDisable();
-    lcd_clear_print("WakingUpSIM800..",500);
+    lcd.clear();
+    lcd.print("WakingUpSIM800..");
+    delay(2000);
   }
   uint8_t csq_1 = 0; //Checking signal before sync time--------------
   bool getSignal = true;
@@ -1475,7 +1380,8 @@ byte setupModem(const char *broker) { //koneksi ke internet
   Serial.println(APN);
   Serial.println(APN_USERNAME);
   Serial.println(APN_PASSWORD);
-  lcd_clear_print("Setup modem:",10);
+  lcd.clear();
+  lcd.print("Setup modem:");
   lcd.setCursor(0, 1);
   // if (!modem.gprsConnect(apn_name[config.selected_apn], apn_usr[config.selected_apn], apn_pswd[config.selected_apn])) {
   if (!modem.gprsConnect(APN, APN_USERNAME, APN_PASSWORD)) {
@@ -1604,7 +1510,8 @@ float read_kubikasi(ModbusMaster flow_modbus){
 String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR-----------
   bool anomali = false;
   Serial.println("Collecting data!");
-  lcd_clear_print("Collecting data!",10);
+  lcd.clear();
+  lcd.print("Collecting data!");
 #ifdef _USE_ULTRASONIC_FLOW_METER_
 #ifdef _DYNAMIC_SERIAL_PORT_PIN_
   sensor_serial_set(1);
@@ -1618,8 +1525,7 @@ String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR---
   delay(200);
   uint16_t batrei = filterAnalog(3); //kalau step up dinyalakan sebelum ambil ambil data analog ups, nilai ups selalu 0
   int P1 = filterAnalog(0);
-  Serial.print("In_SerializeData");
-  Serial.println(rules_exist);
+
   if (rules_exist) {
     float bar_p1 = getPressureValue(0, P1);
     if (rules.oo1 == 7) {
@@ -1745,7 +1651,8 @@ String serializeData(Config configs, bool manual) { //PENGAMBILAN DATA SENSOR---
 
   if (anomali) {
     badSignal_directSend = true; //untuk pengiriman langsung ketika terjadi anomali
-    lcd_clear_print("ANOMALI!",700);
+    lcd.clear(); lcd.print("ANOMALI!!!");
+    delay(1000);
   }
 
   uint16_t signal = 0;
@@ -1835,7 +1742,7 @@ String report_text(String& add_text) {
   String buffer; buffer.reserve(127);
   buffer = "{\"ans\":\"";
   buffer += getStringDateTime(config.timezone);
-  if(SPIFFS.exists(USING_DEF_RULES)){
+  if(SPIFFS.exists(DEF_RULES_FLAG)){
     buffer += "_R!";
   }
   if (!SDok()) {
@@ -1945,7 +1852,7 @@ boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool
 
   if (sending_count > 4) {
     sending_count = 0;
-    lcd_clear_print("Limit achieved!",700);
+    lcd.clear(); lcd.print("Limit achieved!");
     lcd.setCursor(0, 1); lcd.print("Send later!");
     stopWDT();
     delay(500);
@@ -1956,7 +1863,8 @@ boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool
   }
 
   lcd.backlight();
-  lcd_clear_print("Sending process!",10);
+  lcd.clear();
+  lcd.print("Sending process!");
   uint8_t limitSend = config.max_send;
   limitSend > 50 ? limitSend = 50 : limitSend;
   uint16_t jumlah_file_pending = 0;
@@ -1965,7 +1873,9 @@ boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool
   bool useSD = SDok();
   if (sd_halt) {
     useSD = false;
-    lcd_clear_print("SD_TMP_DSBLD!",1000);
+    lcd.clear();
+    lcd.print("SD_TMP_DSBLD!");
+    delay(1000);
   }
 
   if (useSD) {
@@ -1990,7 +1900,9 @@ boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool
   if (jumlah_file_pending == 0) {
     Serial.println("NO FILE TO SEND! _f/mqtt_cnct");
     filePending = false;
-    lcd_clear_print("No Pending file!",500);
+    lcd.clear();
+    lcd.print("No Pending file!");
+    delay(500);
     return false; //jika tidak ada file pending, maka balik-------
   }
 
@@ -2012,7 +1924,9 @@ boolean mqttConnect(const char *broker, bool init_wdt, bool mqtt_connected, bool
 
   if (mqtt_status == false) {
     Serial.println(" fail");
-    lcd_clear_print("Failed2Connect!",1000);
+    lcd.clear();
+    lcd.print("Failed2Connect!");
+    delay(1000);
     return false; //Jangan lanjutkan MQTT konek
   }
 
@@ -2259,7 +2173,8 @@ bool cekSD(uint8_t attempt) {
   SDcheck = SD.begin(SD_SS);
   if (!SDcheck) {
     Serial.println("Card Mount Failed");
-    lcd_clear_print("SD Failed!!!",10);
+    lcd.clear();
+    lcd.print("SD Failed!!!");
     lcd.setCursor(0, 1);
     lcd.print("Reconnect:");
     lcd.setCursor(11, 0); lcd.print("[");
@@ -2285,11 +2200,11 @@ bool cekSD(uint8_t attempt) {
       }
 
       if (limit_reconnect > attempt) {
-        lcd_clear_print("SD FAILED!!!",10);
+        lcd.clear(); lcd.print("  SD FAILED!!!");
         lcd.setCursor(0, 1); lcd.print("Reset Power & SD");
         device_info.sd_failure = true;
         write_device_info(SPIFFS, device_info);
-        delay(500);
+        delay(1000);
         return false;
       }
 
@@ -2300,8 +2215,7 @@ bool cekSD(uint8_t attempt) {
 }
 
 void printSDdisabled() {
-  // lcd.clear(); lcd.print("SD Disabled!");
-  lcd_clear_print("SD Disabled!",10);
+  lcd.clear(); lcd.print("SD Disabled!");
 }
 
 uint16_t clr_sent_pend(bool sent, uint8_t total_delete, uint8_t auto_delete) {
@@ -2310,7 +2224,7 @@ uint16_t clr_sent_pend(bool sent, uint8_t total_delete, uint8_t auto_delete) {
     sent ? dir = "/sent" : dir = "/pend";
     const char* c_dir = dir.c_str();
     uint16_t number = sdop.countFile(SD, c_dir, 101);
-    lcd_clear_print("Files:",10);
+    lcd.clear(); lcd.print("Files:");
     number > 100 ? lcd.print("100+") : lcd.print(number);
 
     delay(1000);
@@ -2323,7 +2237,8 @@ uint16_t clr_sent_pend(bool sent, uint8_t total_delete, uint8_t auto_delete) {
     }
 
     if (btn == 0) {
-      lcd_clear_print("Deleting",10);
+      lcd.clear();
+      lcd.print("Deleting ");
       sent == 1 ? lcd.print("s") : lcd.print("p");
       total_delete == 0 ? lcd.print("all") : lcd.print(total_delete);
       lcd.print("..");
@@ -2333,7 +2248,7 @@ uint16_t clr_sent_pend(bool sent, uint8_t total_delete, uint8_t auto_delete) {
         lcd.clear(); lcd.printf("Deleted:%i", deleted);
         logCount = 0;
       } else {
-        lcd_clear_print("Deleted:0/Failed",10);
+        lcd.clear(); lcd.print ("Deleted:0/Failed");
       }
       delay(1000);
 
@@ -2348,7 +2263,8 @@ uint16_t clr_sent_pend(bool sent, uint8_t total_delete, uint8_t auto_delete) {
       }
       return deleted;
     } else if (btn > 0) {
-      lcd_clear_print("Cancled!",1000);
+      lcd.clear(); lcd.print("Cancled!");
+      delay(1000);
       return 0;
     }
   } else {
@@ -2361,23 +2277,28 @@ uint16_t clr_sent_pend(bool sent, uint8_t total_delete, uint8_t auto_delete) {
 
 bool sync_time(bool set_alarm) {
   bool result = false;
-  lcd_clear_print("Ajd & Sync time",10);
+  lcd.clear();
   lcd.backlight();
+  lcd.home();
+  lcd.print("Ajd & Sync time");
   lcd.setCursor(0, 1);
   lcd.print(DEVICE_ID);
   SIM800SleepDisable();
   setupModem(brokerSelectorF(config.brokerSelector));
-  lcd_clear_print("Checking Time...",10);
+  lcd.clear();
+  lcd.print("Checking Time...");
   uint32_t timeFromServer = syncTimeUnixTime();
   Serial.print("(_f/sync) Time from server::> ");
   Serial.println(timeFromServer);
   if (timeFromServer != 0) {
     setCurrentTime(timeFromServer - (31536000 * 30) + (config.timezone * 3600) - 604800);
     already_sync = true;
-    lcd_clear_print("Time from server",10);
+    lcd.clear();
+    lcd.print("Time from server");
     result = true;
   } else {
-    lcd_clear_print("NO time received",10);
+    lcd.clear();
+    lcd.print("NO time received");
   }
 
   if (set_alarm) {
@@ -2400,7 +2321,7 @@ void recountPend(uint16_t limited) {
     if (!(SD.exists("/pend"))) {
       sdop.createDir(SD, "/pend");
     }
-    lcd_clear_print("RECOUNT PEND...",10);
+    lcd.clear(); lcd.print("RECOUNT PEND...");
     if (limited > 0) {
       pending_aprox = sdop.countFile(SD, "/pend", limited);
     } else {
@@ -2413,10 +2334,10 @@ void recountPend(uint16_t limited) {
       device_info.sd_failure = true;
       // writeConfig(SPIFFS, config);
       write_device_info(SPIFFS, device_info);
-      lcd_clear_print("Error!",10);
+      lcd.clear(); lcd.print("Error!");
       lcd.setCursor(0, 1); lcd.printf("/pend:%i", pending_aprox);
     } else {
-      lcd_clear_print("Done!",10);
+      lcd.clear(); lcd.print("Done!");
       lcd.setCursor(0, 1); lcd.printf("/pend:%i", pending_aprox);
     }
 
@@ -2433,7 +2354,7 @@ void recountSent(uint8_t limited) {
     if (!(SD.exists("/sent"))) {
       sdop.createDir(SD, "/sent");
     }
-    lcd_clear_print("RECOUNT SENT...",10);
+    lcd.clear(); lcd.print("RECOUNT SENT...");
     if (limited > 0) {
       recorded_aprox = sdop.countFile(SD, "/sent", limited);
     } else {
@@ -2443,10 +2364,10 @@ void recountSent(uint8_t limited) {
     if (recorded_aprox > 5000) { //VERSI N----MLIHAT KASUS DI SEMA AGUNG
       device_info.sd_failure = true;
       write_device_info(SPIFFS, device_info);
-      lcd_clear_print("Error!",10);
+      lcd.clear(); lcd.print("Error!");
       lcd.setCursor(0, 1); lcd.printf("/sent:%i", recorded_aprox);
     } else {
-      lcd_clear_print("Done!",10);
+      lcd.clear(); lcd.print("Done!");
       lcd.setCursor(0, 1); lcd.printf("/sent:%i", recorded_aprox);
     }
     stopWDT();
@@ -2456,7 +2377,7 @@ void recountSent(uint8_t limited) {
 }
 
 void do_hard_reset(){
-  lcd_clear_print("Hard RST!",10);
+  lcd.clear(); lcd.print("Hard RST!");
   pinMode(SIM_RING, OUTPUT);
   digitalWrite(SIM_RING, 0);
   delay(10000);
@@ -2561,7 +2482,7 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
   // disableSD_temporary = false;
   if (!disableSD_temporary) { //cek jumlah pending apakah anomali (65535) atau tidak,
     recountPend(500);
-    lcd_clear_print("P:",10);
+    lcd.clear(); lcd.print("P:");
     lcd.print(pending_aprox);
     delay(800);
     if (pending_aprox >= 500) {
@@ -2577,14 +2498,18 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
     if ((recorded_aprox > config.SD_store_limit) && (config.SD_store_limit > 0)) { //cek kalo batas penyimpanan data terdeteksi
       if (recorded_aprox >= 200) {
         clr_sent_pend(1, 200, 1); //ngk perlu update recorded aprox
-        lcd_clear_print("OVER_LIMIT!",500);
+        delay(800);
+        lcd.clear();
+        lcd.print("OVER_LIMIT!");
       } else {
         recorded_aprox = recorded_aprox - clr_sent_pend(1, (config.max_send * 2), 1);
         delay(800);
-        lcd_clear_print("Below 200 OK",500);
+        lcd.clear();
+        lcd.print("Below 200 OK");
       }
       delay(800);
-      lcd_clear_print("New total rec:",10);
+      lcd.clear();
+      lcd.print("New total rec:");
       lcd.setCursor(0, 1); lcd.print(recorded_aprox);
       delay(800);
       lcd.clear();
@@ -2626,10 +2551,13 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
     // if (!(SPIFFS.exists(DATA_FILENAME))) {
     if (SPIFFS.exists(DATA_FILENAME)) {
       sdop.deleteFile(SPIFFS, DATA_FILENAME);
-      lcd_clear_print("SPIFFS Deleted",1000);
+      lcd.clear();
+      lcd.print("SPIFFS Deleted");
+      delay(1000);
     }
     sdop.writeFile(SPIFFS, DATA_FILENAME, data);
-    lcd_clear_print("Rec2SPIFFS!",10);
+    lcd.clear();
+    lcd.print("Rec2SPIFFS!");
     String isi_dataSPIFFS = sdop.readFile(SPIFFS, DATA_FILENAME, 0); //Baca isi file di SD
     const char* isi_from_string = isi_dataSPIFFS.c_str(); //membuat const char* dari string!!!!!
     Serial.printf("Saved2SPIFFS: %s \n", isi_from_string);
@@ -2638,7 +2566,8 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
 
   esp_task_wdt_reset(); //RESET WATCHDOG TIMER-------------
   stopWDT();
-  lcd_clear_print("Checking status!",10);
+  lcd.clear();
+  lcd.print("Checking status!");
   //cek burst send mode--------------------
   // cek_burst_mode(config.burst_send_h_on, config.burst_send_h_off); //lansung seting burstMode
   //cek burst send mode--------------------
@@ -2653,7 +2582,7 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
     uint8_t aprox_pending_data = sdop.countFile(SD, "/pend", (max_pending_data + 5 ));
     if (aprox_pending_data > max_pending_data) {
       badSignal_directSend = true;
-      lcd_clear_print("More than",10);
+      lcd.clear(); lcd.print("More than");
       lcd.setCursor(0, 1); lcd.print ("it should!!!");
     }
   }
@@ -2668,13 +2597,17 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
   for (ix = 0; ix < 5; ix++) {
     cek_battery_safe();
     if (BatterySafeMode) {
+      lcd.clear();
+      lcd.print("SAFE MODE ON!!!");
       Serial.println("SAFEMODE!");
-      lcd_clear_print("SAFE MODE ON!!!",500);
+      delay(80);
     } else {
-      lcd_clear_print("BATTERY OK!",500);
+      lcd.clear();
+      lcd.print("BAT OK!");
     }
   }
-  lcd_clear_print("Starting SIM800",10);
+  lcd.clear();
+  lcd.print("Starting SIM800");
   if (badSignal_directSend && (!BatterySafeMode)) {
     Serial.println("Prv.badsig/drctSend_f/Log");
     SIM800SleepDisable();
@@ -2740,7 +2673,9 @@ void log_data(bool manual) { //JANGAN LUPA KASI WATCHDOG TIMER KARENA MUNGKIN SA
 
 
 void testKirim() { //Fungsi tes kirim----------------
-  lcd_clear_print("Test kirim...",10);
+  lcd.clear();
+  lcd.home();
+  lcd.print("Test kirim...");
   badSignal_directSend = true;
   SIM800SleepDisable();
   mqtt.setBufferSize(1024);
@@ -3201,7 +3136,7 @@ void parsing_message(String& message) {
   find = "soft_reset";
   if (search_word(find, message) > -1) {
     stopWDT();
-    lcd_clear_print("CMD_RESTART!",10);
+    lcd.clear(); lcd.print("CMD_RESTART!");
     Serial.println("CMD_RESTART!");
     mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Will restart in 10s!\"}");
     startWDT(10);
@@ -3295,10 +3230,12 @@ void set_battery_safe() {
   }
   config.battery_safe = bat;
   if (writeConfig(SPIFFS, config)) {
-    lcd_clear_print("NewConfig Saved!",10);
+    lcd.clear();
+    lcd.print("NewConfig Saved!");
   }
   else {
-    lcd_clear_print("Failed to Save!",10);
+    lcd.clear();
+    lcd.print("Failed to Save!");
   }
   delay(1000);
   lcd.clear();
@@ -3321,10 +3258,12 @@ void minimum_signal() {
   }
   config.minimum_signal = min_sig;
   if (writeConfig(SPIFFS, config)) {
-    lcd_clear_print("NewConfig Saved!",10);
+    lcd.clear();
+    lcd.print("NewConfig Saved!");
   }
   else {
-    lcd_clear_print("Failed to Save!",10);
+    lcd.clear();
+    lcd.print("Failed to Save!");
   }
   delay(1000);
   lcd.clear();
@@ -3341,8 +3280,9 @@ bool begin_spiffs() {
   esp_task_wdt_init(300, true); //enable panic so ESP32 restarts limit 5 menit jika terjadi kegagalan koneksi SD
   esp_task_wdt_add(NULL); //add current thread to WDT watch
 
-  lcd_clear_print("Starting SPIFFS!",10);
+  lcd.clear();
   lcd.backlight();
+  lcd.print("Starting SPIFFS!");
   bool status = true;
   uint8_t i = 0;
   //------------START SPIFFS--------------------------------
@@ -3378,7 +3318,7 @@ void print_config_devinfo(){
 }
 
 void setDefSettings() {
-  lcd_clear_print("Reset config...",10);
+  lcd.clear(); lcd.print("Reset config...");
   String myloc; myloc.reserve(40);
   myloc = DEVICE_LOCATION;
   String mydn; mydn.reserve(12);
@@ -3413,12 +3353,13 @@ void setDefSettings() {
   // Serial.println(device_info.my_dn);
   // Serial.println(device_info.my_location);
   print_config_devinfo();
-  lcd_clear_print("Done!",500);
+  lcd.clear(); lcd.print("Done!");
+  delay(500);
 }
 
 void update_config_report() {
   bool bUpdateConfig = writeConfig(SPIFFS, config);
-  lcd_clear_print("Save config:",10);
+  lcd.clear(); lcd.print("Save config:");
   lcd.setCursor(0, 1);
   if (!bUpdateConfig) {
     lcd.print("Error!");
@@ -3521,7 +3462,9 @@ void setup() {
   //buat char baru untuk LCD----------
 
   lcd.backlight();
-  lcd_clear_print("REBOOT!",1000);
+  lcd.clear();
+  lcd.print("REBOOT!");
+  delay(1000);
   lcd.clear();
   //--------------------------------END SETUP DASAR------------------------------
   if (!SPIFFS.begin(true)) {
@@ -3667,10 +3610,9 @@ void setup() {
     rules_exist = readRules(SPIFFS,rules);
     String text_rules; text_rules.reserve(380);
     Serial.println("RULES_EXIST_SETUP");
-    Serial.print("InData");
-    Serial.println(rules_exist);
-    lcd_clear_print("RULES_EXIST",800);
+    lcd.clear(); lcd.print("RULES_EXIST");
     text_rules = sdop.readFile(SPIFFS, RULES_FILENAME, 1);
+    delay(800);
   } else {
     String text_rules; text_rules.reserve(380);
     const char *c_rueles = "{\"rules\":\"/rules.txt\","
@@ -3693,16 +3635,19 @@ void setup() {
                            "\"v3\":[0, 200.3],"
                            "\"i3\":[0, 50.5],"
                            "\"c3\":[0, 0.53]}";
-    lcd_clear_print("NO_RULES",1000);
+    lcd.clear(); lcd.print("NO_RULES");
+    delay(1000);
     if (sdop.writeFile(SPIFFS, RULES_FILENAME, c_rueles)) {
       rules_exist = true;
-      sdop.writeFile(SPIFFS,USING_DEF_RULES,"0");
-      lcd_clear_print("RULES_WRITEN!",1000);
+      sdop.writeFile(SPIFFS,DEF_RULES_FLAG,"0");
+      lcd.clear(); lcd.print("RULES_WRITEN!");
       text_rules = sdop.readFile(SPIFFS, RULES_FILENAME, 1);
+      delay(1000);
     } else {
       rules_exist = false;
-      lcd_clear_print("RULES_FAILED!",1000);
+      lcd.clear(); lcd.print("RULES_FAILED!");
       Serial.println("RULES_FAILED!");
+      delay(1000);
     }
   }
   //-------------------END READ RULES------------------------------------------
@@ -3715,7 +3660,9 @@ void setup() {
         write_device_info(SPIFFS, device_info);
       }
       lcd.backlight();
-      lcd_clear_print("SD Connected!",500);
+      lcd.clear();
+      lcd.print("SD Connected!");
+      delay(500);
 
       //CEK SD CARD TYPE---------------
       String SDtype = sdop.cardInfo();
@@ -3768,7 +3715,9 @@ void setup() {
     internalRTCwakeup((60 * config.ambilDataInterval) + 15); //set alarm sendiri untuk jaga2
     Serial.println("**INTERNAL RTC!**");
     lcd.backlight();
-    lcd_clear_print("Internal RTC!",1000);
+    lcd.clear();
+    lcd.print("Internal RTC!");
+    delay(1000);
     lcd.clear();
     if (!alreadyLog) { //mungkin terjadi sesuatu shg tidak ngelog
       setAlarmTwo(config.ambilDataInterval);
@@ -3823,16 +3772,14 @@ void setup() {
         } else if (buffer == "#data$") {
           selected = true;
           menu.levelMenu = 0;
-          lcd_clear_print("Preparing Data",100);
+          delay(300);
           printData();
           lcd.clear();
           //cek_spiffs();
-        } else if (buffer == "#sleep$") {
-          buffer == "break";
-          lcd_clear_print("Going to Sleep!",1000);
-            // selected = true;
-            // menu.levelMenu = 0;
-            // printAnalog();*/
+          /* } else if (buffer == "#analog$") {
+            selected = true;
+            menu.levelMenu = 0;
+            printAnalog(); */
         } else if (buffer == "#status$") {
           selected = true; menu.levelMenu = 0;
           printStatus();
@@ -3841,7 +3788,8 @@ void setup() {
           delay(300);
           sdop.deleteFile(SPIFFS, RULES_FILENAME);
           rules_exist = false;
-          lcd_clear_print("Rules Deleted!",1000);
+          lcd.clear(); lcd.print("Rules Deleted!");
+          delay(1000);
         } else if (buffer == "#disablesd$") {
           selected = true; menu.levelMenu = 1;
           delay(300);
@@ -3849,7 +3797,15 @@ void setup() {
           device_info.sd_failure = false;
           writeConfig(SPIFFS, config);
           write_device_info(SPIFFS, device_info);
-          lcd_clear_print("SD Disabled!",1000);
+          lcd.clear();
+          lcd.print("SD Disabled!");
+          // lcd.setCursor(0, 1);
+          // if (device_info.sd_failure) {
+          //   lcd.print("SD_FAILED!");
+          // } else {
+          //   lcd.print("SD_OK");
+          // }
+          delay(1000);
         } else if (buffer == "#enablesd$") {
           selected = true; menu.levelMenu = 1;
           delay(300);
@@ -3857,7 +3813,8 @@ void setup() {
           device_info.sd_failure = false;
           writeConfig(SPIFFS, config);
           write_device_info(SPIFFS, device_info);
-          lcd_clear_print("SD will Enabled",10);
+          lcd.clear();
+          lcd.print("SD will Enabled");
           lcd.setCursor(0, 1);
           lcd.print("after RESTART!");
           delay(1000);
@@ -3868,7 +3825,8 @@ void setup() {
 #ifdef _USE_A1_FOR_WATER_LEVEL_
           uint8_t result, datasize = 2; //datasize 2
           digitalWrite(SW_AWLR_PWR, 1);
-          lcd_clear_print("Preparing AWLR!",500);
+          lcd.clear(); lcd.print("Preparing AWLR!");
+          delay(500);
           uint8_t btn = wait_button(0);
           float v = 0, water_h = 0;
           while (btn != 2) {
@@ -3882,7 +3840,8 @@ void setup() {
             delay(200);
           }
           digitalWrite(SW_AWLR_PWR, 0);
-          lcd_clear_print("AWLR exit!",1000);
+          lcd.clear(); lcd.print("AWLR exit!");
+          delay(2000);
 #endif
 
 #ifdef _USE_ULTRASONIC_FLOW_METER_
@@ -3907,19 +3866,27 @@ void setup() {
           if (initialValue == 10) {
             //erase counted energy
             pzem.resetEnergy();
-            lcd_clear_print("Energy is reset",1000);
+            lcd.clear();
+            lcd.print("Energy is reset");
+            delay(1000);
           } else if (initialValue == 1) {
             //set connected pzem with address 1
             pzem.setAddress(1);
-            lcd_clear_print("PZEM addr 1 set",1000);
+            lcd.clear();
+            lcd.print("PZEM addr 1 set");
+            delay(1000);
           } else if (initialValue == 2) {
             //set connected pzem with address 2
             pzem.setAddress(2);
-            lcd_clear_print("PZEM addr 2 set",1000);
+            lcd.clear();
+            lcd.print("PZEM addr 2 set");
+            delay(1000);
           } else if (initialValue == 3) {
             //set connected pzem with address 3
             pzem.setAddress(3);
-            lcd_clear_print("PZEM addr 3 set",1000);
+            lcd.clear();
+            lcd.print("PZEM addr 3 set");
+            delay(1000);
           } else if (initialValue == 0) {
             //check available address
             Serial.println("-----------------");
@@ -3940,7 +3907,8 @@ void setup() {
               btn = wait_button(0);
               delay(500);
             }
-            lcd_clear_print("Done!",1000);
+            lcd.clear(); lcd.print("Done!");
+            delay(1000);
           } else if (initialValue == 7) {
             int8_t btn = -1;
             float v1;
@@ -3952,7 +3920,8 @@ void setup() {
               btn = wait_button(0);
               delay(500);
             }
-            lcd_clear_print("Done!",1000);
+            lcd.clear(); lcd.print("Done!");
+            delay(1000);
           } else if (initialValue == 8) {
             int8_t btn = -1;
             float v1;
@@ -3964,10 +3933,13 @@ void setup() {
               btn = wait_button(0);
               delay(500);
             }
-            lcd_clear_print("Done!",1000);
+            lcd.clear(); lcd.print("Done!");
+            delay(1000);
           }
           else {
-            lcd_clear_print("NO CMD!",1000);
+            lcd.clear();
+            lcd.print("NO CMD!");
+            delay(1000);
             //do nothing
           }
 
@@ -3994,12 +3966,12 @@ void setup() {
         } else if (buffer == "#clrpend$") {
           selected = true; menu.levelMenu = 1;
           delay(300);
-          lcd_clear_print("Preparing...",10);
+          lcd.clear(); lcd.print("Preparing...");
           clr_sent_pend(0, 50, 0);
         } else if (buffer == "#clrsent$") {
           selected = true; menu.levelMenu = 1;
           delay(300);
-          lcd_clear_print("Preparing...",10);
+          lcd.clear(); lcd.print("Preparing...");
           clr_sent_pend(1, 50, 0);
         } else if (buffer == "#bat$") {
           selected = true; menu.levelMenu = 0;
@@ -4011,11 +3983,11 @@ void setup() {
           delay(300);
           minimum_signal();
           delay(300);
-        } else if (buffer == "#date$") {
+        } else if (buffer == "#burst$") {
           selected = true; menu.levelMenu = 0;
           delay(300);
-          set_lcd_date_time();
-          lcd_clear_print("Done!",500);
+          // set_burst_hour();
+          // delay(300);
         } else if (buffer == "#defset$") {
           selected = true; menu.levelMenu = 0;
           setDefSettings();
@@ -4043,7 +4015,9 @@ void setup() {
           interactiveInputInterval("Ambil Data (T)", initialValue, 1, "menit");
           config.ambilDataInterval = initialValue;
           bool bUpdateConfig = writeConfig(SPIFFS, config);
-          lcd_clear_print("Save config:",10);
+          lcd.clear();
+          lcd.home();
+          lcd.print("Save config:");
           lcd.setCursor(0, 1);
           if (!bUpdateConfig) {
             lcd.print("Error!");
@@ -4059,7 +4033,9 @@ void setup() {
           interactiveInputInterval("Kirim Data (T)", initialValue, 1, "menit");
           config.kirimDataInterval = initialValue;
           bool bUpdateConfig = writeConfig(SPIFFS, config);
-          lcd_clear_print("Save config:",10);
+          lcd.clear();
+          lcd.home();
+          lcd.print("Save config:");
           lcd.setCursor(0, 1);
           if (!bUpdateConfig) {
             lcd.print("Error!");
@@ -4074,7 +4050,9 @@ void setup() {
           interactiveInputInterval("Zona waktu:", initialValue, 1, "jam");
           config.timezone = initialValue;
           bool bUpdateConfig = writeConfig(SPIFFS, config);
-          lcd_clear_print("Save config:",10);
+          lcd.clear();
+          lcd.home();
+          lcd.print("Save config:");
           lcd.setCursor(0, 1);
           if (!bUpdateConfig)
           {
@@ -4102,7 +4080,9 @@ void setup() {
 #endif
 
           bool bUpdateConfig = writeConfig(SPIFFS, config);
-          lcd_clear_print("Save config:",10);
+          lcd.clear();
+          lcd.home();
+          lcd.print("Save config:");
           lcd.setCursor(0, 1);
           if (!bUpdateConfig)
           {
@@ -4129,9 +4109,9 @@ void setup() {
         lcd.setCursor(15, 1); lcd.print("X");
 #endif
       }
+
       if (millis() - wakeUpTime > WAKE_UP_TIME) break;
     } //END------HANDLE MENU--------------------------------------
-
     stopWDT();
   } else {//Pertama kali hidup------------
     //SIM800SleepDisable();  //
@@ -4155,12 +4135,15 @@ void setup() {
     wait_for_signal(60, config.minimum_signal);
     delay(1500);
     //Checking signal before sync time--------------
-    lcd_clear_print("Sync time...",10);
+    lcd.clear();
+    lcd.home();
+    lcd.print("Sync time...");
     lcd.setCursor(0, 1);
     lcd.print(DEVICE_ID);
 
     setupModem(brokerSelectorF(config.brokerSelector));
-    lcd_clear_print("Checking Time...",10);
+    lcd.clear();
+    lcd.print("Checking Time...");
     uint32_t timeFromServer = syncTimeUnixTime();
     modem.gprsDisconnect();
     SIM800SleepEnable();
@@ -4168,9 +4151,11 @@ void setup() {
     Serial.println(timeFromServer);
     if (timeFromServer != 0) {
       setCurrentTime(timeFromServer - (31536000 * 30) + (config.timezone * 3600) - 604800);
-      lcd_clear_print("Time from server",10);
+      lcd.clear();
+      lcd.print("Time from server");
     } else {
-      lcd_clear_print("NO time received",10);
+      lcd.clear();
+      lcd.print("NO time received");
     }
     delay(500);
     //END TIME CONSUMING COMMAND---------------------------------------------------------
@@ -4190,7 +4175,7 @@ void setup() {
     uint8_t t_cnt = 0;
     int8_t btn = -1;
     bool send_on_hard_reset = true;
-    lcd_clear_print("PressBtn=Cancle",10);
+    lcd.clear(); lcd.print("PressBtn=Cancle");
     // sdfsdf;
     while (t_cnt < 10) {
       btn = wait_button(0);
@@ -4200,12 +4185,14 @@ void setup() {
       if (btn >= 0) {
         send_on_hard_reset = false;
         t_cnt = 11;
-        lcd_clear_print("Cancled!",500);
+        lcd.clear(); lcd.print("Cancled!");
+        delay(500);
       }
       t_cnt++;
     }
     if (send_on_hard_reset) {
-      lcd_clear_print("SENDING TEST!",500);
+      lcd.clear(); lcd.print("SENDING TEST!");
+      delay(500);
       testKirim();
     }
 #endif
@@ -4224,7 +4211,8 @@ void setup() {
 
   //---------------------------------when alarm triggered
   if (bAlarmOne) {
-    lcd_clear_print("Alarm 1!",500);
+    lcd.clear(); lcd.print("Alarm 1!");
+    delay(200);
     Serial.println("In alarm one");
     internalRTCwakeup((60 * config.ambilDataInterval) + 15);
     logCount = 0; //penanda kalau alarm 1 sudah pernah dipanggil
@@ -4256,17 +4244,20 @@ void setup() {
       }
     } else if (pending_aprox <= 0) {
       Serial.println(">>>NO PENDING!<<<");
-      lcd_clear_print("Alarm 1 CANCLED!",10);
+      lcd.clear();
+      lcd.print("Alarm 1 CANCLED!");
       lcd.setCursor(0, 1); lcd.print("NO PENDING!");
     } else {
       Serial.println(">>>SAFE MODE!<<<");
-      lcd_clear_print("Alarm 1 CANCLED!",10);
+      lcd.clear();
+      lcd.print("Alarm 1 CANCLED!");
       lcd.setCursor(0, 1); lcd.print("IN SAFE MODE!");
     }
     delay(500);
   } else if (bAlarmTwo) {
-    lcd_clear_print("Alarm 2!",500);
+    lcd.clear(); lcd.print("Alarm 2!");
     lcd.backlight();
+    delay(500);
     Serial.println("-----Alarm two (_f/Setup)-----");
     log_data(false);
     alreadyLog = true; //penanda kalau alarm 2 sudah pernah dipanggil
@@ -4289,7 +4280,9 @@ void loop() {
     for (trial = 0; trial < 3; trial++) { //Coba 5 kali kirim
       if (mqttConnect(brokerSelectorF(config.brokerSelector), 1, 0, disableSD_temporary)) { //Langsung kirim data
         trial = 6;
-        lcd_clear_print("Success!",500);
+        lcd.clear();
+        lcd.print("Success!");
+        delay(500);
       } else {
         mqtt.disconnect();
       }
@@ -4306,7 +4299,7 @@ void loop() {
         wdt_is_set = true;
       }
 
-      lcd_clear_print("Preparing!",50);
+      lcd.clear(); lcd.print("Preparing!"); delay(100);
       bool mqtt_connected = mqtt.connect(DEVICE_ID);
       if (!mqtt_connected) { //while
         mqtt_connected = mqtt.connect(DEVICE_ID);
@@ -4355,7 +4348,8 @@ void loop() {
           }else{
             mqtt.publish(STATUS_TOPIC, "{\"ans\":\"SyncFAILED\"}");
           }
-          lcd_clear_print("Sync Time done!",500);
+          lcd.clear(); lcd.print("Sync Time done!");
+          delay(500);
         } else if (cmd_message == cmd_clear_pend) {
           mqtt.publish(STATUS_TOPIC, "{\"ans\":\"Clear some files in SD/pend...\"}");
           uint16_t deleted = clr_sent_pend(0, sd_limit_access, 1);
@@ -4451,7 +4445,7 @@ void loop() {
 
       if (wait_button(0) > -1) {
         lcd.backlight();
-        lcd_clear_print("End listening?",10);
+        lcd.clear(); lcd.print("End listening?");
         lcd.setCursor(0, 1); lcd.print("No");
         lcd.setCursor(7, 1); lcd.print("Yes");
         int8_t btn = -1;
@@ -4476,7 +4470,7 @@ void loop() {
 
       if ((millis() - start_time_for_broker) > (config.time_for_broker * 1000)) { //waktu habis
         close_communication();
-        lcd_clear_print("TIMEOUT!",10);
+        lcd.clear(); lcd.print("TIMEOUT!");
       } else {
         time_broker++;
         lcd.clear();
@@ -4498,7 +4492,9 @@ void loop() {
       recount = true;
     }
 
-    lcd_clear_print("disconnecting...",10);
+    lcd.clear();
+    lcd.backlight(); lcd.print("disconnecting...");
+
     if (cmd_message == cmd_close) {  //BUAT PESAN DI MQTT BROKER KALAU KITA AKAN DISKONEK, DAN AKAN KONEK LAGI NANTI-------------
       stopWDT();
 
@@ -4569,7 +4565,9 @@ void loop() {
     }
     internalRTCwakeup((60 * config.ambilDataInterval) + 15);
     Serial.println("Sleep!_f/1loop");
-    lcd_clear_print("GoingToSleep!",200);
+    lcd.clear();
+    lcd.print("GoingToSleep!");
+    delay(200);
     lcd.noBacklight();
     lcd.clear();
     lcdPrintCurrentDate(); // ---[5/12/60]---

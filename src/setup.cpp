@@ -13,14 +13,14 @@
 #define SOFTWARE_VERSION      "B4.1.1g" //UNTUK BOARD YG SUDAH DIMODIF
 #define HARDWARE_VERSION      "BSA_IoT V4"
 
-#define DEVICE_LOCATION       "Testing" //SESUAIKAN DENGAN NAMA LOKASI ALAT
+#define DEVICE_LOCATION       "Patalasang1&2" //SESUAIKAN DENGAN NAMA LOKASI ALAT
 #define DEFAULT_TIMEZONE      8 //WIB=7, WITA=8, WIT=9
 #define LCD_PRESSURE_OFFSET   0 //SESUAIKAN DENGAN NILAI OFFSET DI HARDWARE DOCS
 
 // #define _USE_STAGING_
 #define _SEND_DATA_ON_HARD_RESET_
 // #define _DYNAMIC_SERIAL_PORT_PIN_  //jika pin serial komunikasi antara kelistrikan dan flow dibedakan
-// #define _USE_ALL_PRESSURE_
+#define _USE_ALL_PRESSURE_
 // #define _USE_FLOW_ID_5_
 // #define _USE_FLOW_ID_6_
 #define _ADDON_               ONLY_PRESSURE 
