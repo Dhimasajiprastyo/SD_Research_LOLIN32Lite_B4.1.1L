@@ -4559,7 +4559,6 @@ void loop() {
         time_broker++;
         lcd.clear();
         if (cmd_message == cmd_wait_me) {
-          lcd.noBacklight();
           lcd.print("I'M WAITING!!!");
           lcd.setCursor(8, 1); lcd.printf("%i/%i", count_wait_me, int_limit_wait_me);
         } else {
